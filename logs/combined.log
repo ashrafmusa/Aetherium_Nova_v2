@@ -189,3 +189,18 @@
 2025-08-07 19:07:43 [31merror[39m: [31mError mining block API Error (Status: 400):[39m
 2025-08-07 19:11:26 [32minfo[39m: [Mempool] Pruned 1 expired transaction(s).
 2025-08-08 00:04:49 [32minfo[39m: SIGINT received. Saving state and shutting down...
+2025-09-19 10:49:38 [32minfo[39m: [Network] Starting sync with peers...
+2025-09-19 10:49:38 [32minfo[39m: 🚀 Node running at http://localhost:3001
+2025-09-19 10:49:38 [32minfo[39m: [Chain] No chain file found. Creating genesis state.
+2025-09-19 10:49:38 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-09-19 10:49:38 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-09-19 10:49:38 [32minfo[39m: [Staking] In-memory staking ledger cleared.
+2025-09-19 10:49:38 [32minfo[39m: [Ledger Rebuild] Applied genesis pre-mine and validator stake.
+2025-09-19 10:49:38 [32minfo[39m: [Ledger] Starting ledger rebuild from chain...
+2025-09-19 10:49:38 [32minfo[39m: [Ledger] Rebuild complete.
+2025-09-19 10:49:38 [32minfo[39m: [Chain] Chain saved to disk.
+2025-09-19 10:49:38 [32minfo[39m: [Ledger] State snapshot saved to disk.
+2025-09-19 10:49:38 [32minfo[39m: [Staking] Staking ledger snapshot saved to disk.
+2025-09-19 10:49:38 [32minfo[39m: [Chain] Genesis block created and initial state saved.
+2025-09-19 10:49:38 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-09-19 10:49:38 [32minfo[39m: [Network] Peer synchronization complete.
