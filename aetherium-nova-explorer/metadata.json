@@ -1,0 +1,5 @@
+{
+  "name": "Aetherium Nova Explorer",
+  "description": "An interactive web application that simulates and visualizes the Aetherium Nova blockchain, a fictional, next-generation network with features like post-quantum cryptography, hybrid consensus, and decentralized computation.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,31 @@
+{
+  "genesisBlockTimestamp": 1678886400000,
+  "bootstrapAddress": "0xe5bca44e2313297f074536a776e8732b275505b5",
+  "bootstrapFunds": 1000000000000000,
+  "bootstrapStake": 5000000,
+  "minStake": 1000,
+  "delegatorSharePercentage": 0.2,
+  "vmMemoryLimitMB": 128,
+  "vmExecutionTimeoutMs": 5000,
+  "gasPriceUnit": 100,
+  "minFee": 0.001,
+  "baseReward": 50,
+  "maxTransactionsPerBlock": 100,
+  "transactionPruneInterval": 60000,
+  "transactionTTL": 300000,
+  "gasCosts": {
+    "BASE_EXECUTION": 100,
+    "STORAGE_READ": 10,
+    "STORAGE_WRITE": 100,
+    "LOG": 5,
+    "BYTECODE_BYTE": 0.05,
+    "CALL_OVERHEAD": 50,
+    "CREATE_ACCOUNT": 2000,
+    "INTER_CONTRACT_CALL": 500,
+    "TRANSFER_BY_CONTRACT": 200
+  },
+  "unjailPeriodMs": 10000,
+  "maxSlashCount": 3,
+  "epochLength": 100,
+  "unstakePeriodMs": 604800000
+}

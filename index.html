@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aetherium Nova CLI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Include CryptoJS for browser-side encryption/decryption -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        .section-header {
+            border-bottom: 2px solid #374151;
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .log-success { color: #4CAF50; } /* Green */
+        .log-error { color: #F44336; }   /* Red */
+        .log-info { color: #2196F3; }    /* Blue */
+        .log-warning { color: #FFC107; } /* Yellow */
+        .log-default { color: #e0e0e0; } /* Default gray */
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-start justify-center p-4">
+    <div class="bg-gray-800 p-8 rounded-xl shadow-lg w-full max-w-5xl space-y-8">
+        <h1 class="text-4xl font-bold text-center text-indigo-400">Aetherium Nova CLI</h1>
+        <p class="text-center text-gray-400">Interact with your local Aetherium Nova node via its REST API.</p>
+
+        <!-- Node & Network Status -->
+        <div class="bg-gray-700 p-6 rounded-lg">
+            <h2 class="text-2xl font-bold text-indigo-300 section-header">Node & Network Status</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <button id="getStatusButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                    Get Node Status
+                </button>
+                <button id="getLatestBlockButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                    Get Latest Block
+                </button>
+                <button id="getMempoolButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                    Get Mempool
+                </button>
+            </div>
+        </div>
+
+        <!-- Wallet Management -->
+        <div class="bg-gray-700 p-6 rounded-lg">
+            <h2 class="text-2xl font-bold text-indigo-300 section-header">Wallet Management</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Create New Wallet</h3>
+                    <button id="createWalletButton" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Create New Wallet
+                    </button>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Load Existing Wallet (for signing)</h3>
+                    <input type="text" id="loadWalletAddress" placeholder="Wallet Address (e.g., 0x...)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <textarea id="loadWalletJson" placeholder="Paste wallet JSON content here (from .json file)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg h-24 resize-y"></textarea>
+                    <input type="password" id="loadWalletPassphrase" placeholder="Passphrase (if encrypted)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="loadWalletButton" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Load Wallet
+                    </button>
+                </div>
+            </div>
+            <div class="mt-6 text-center text-gray-300">
+                <p id="currentWalletDisplay" class="font-bold">Current Loaded Wallet (for signing): <span id="currentWalletAddress" class="font-mono text-sm text-gray-400">None</span></p>
+            </div>
+        </div>
+        
+        <!-- Core Transactions -->
+        <div class="bg-gray-700 p-6 rounded-lg">
+            <h2 class="text-2xl font-bold text-indigo-300 section-header">Core Transactions</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Transfer Funds -->
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Transfer Funds</h3>
+                    <input type="text" id="transferFrom" placeholder="From Address (loaded wallet)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg" disabled>
+                    <input type="text" id="transferTo" placeholder="To Address" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="number" id="transferAmount" placeholder="Amount" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="number" id="transferFee" placeholder="Fee" value="0.001" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="transferButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Send Transfer
+                    </button>
+                </div>
+                <!-- Deploy Contract -->
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Deploy Contract</h3>
+                    <input type="text" id="deployFrom" placeholder="Deployer Address (loaded wallet)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg" disabled>
+                    <input type="text" id="deployFile" value="MyCounter" class="w-full p-2 mb-2 bg-gray-900 rounded-lg" disabled>
+                    <textarea id="deployCode" placeholder="Paste compiled contract JS code (e.g., from dist/contracts/MyCounter.js)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg h-24 resize-y"></textarea>
+                    <input type="number" id="deployFee" placeholder="Fee" value="0.001" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="deployButton" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Deploy
+                    </button>
+                </div>
+                <!-- Call Contract -->
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Call Contract</h3>
+                    <input type="text" id="callFrom" placeholder="Caller Address (loaded wallet)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg" disabled>
+                    <input type="text" id="callContractAddress" placeholder="Contract Address" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="text" id="callMethod" placeholder="Method Name (e.g., increment)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="number" id="callFee" placeholder="Fee" value="0.001" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="text" id="callParams" placeholder="Parameters (JSON array, e.g., [10])" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="callButton" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Call
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Staking -->
+        <div class="bg-gray-700 p-6 rounded-lg">
+            <h2 class="text-2xl font-bold text-indigo-300 section-header">Staking</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Stake</h3>
+                    <input type="text" id="stakeFrom" placeholder="Delegator Address (loaded wallet)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg" disabled>
+                    <input type="text" id="stakeTo" placeholder="Validator Address" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="number" id="stakeAmount" placeholder="Amount" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="number" id="stakeFee" placeholder="Fee" value="0.001" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="stakeButton" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Stake
+                    </button>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Unstake / Claim Rewards</h3>
+                    <input type="text" id="unstakeFrom" placeholder="Delegator Address (loaded wallet)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg" disabled>
+                    <input type="text" id="unstakeFromValidator" placeholder="Validator Address" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="number" id="unstakeAmount" placeholder="Unstake Amount (0 to claim)" value="0" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="number" id="unstakeFee" placeholder="Fee" value="0.001" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="unstakeButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 mb-2">
+                        Send Unstake
+                    </button>
+                    <button id="claimRewardsButton" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Claim Rewards
+                    </button>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Unjail Validator</h3>
+                    <p class="text-sm text-gray-400 mb-2">Attempt to unjail a validator after serving its jail period.</p>
+                    <input type="text" id="unjailAddress" placeholder="Validator Address (loaded wallet)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg" disabled>
+                    <button id="unjailButton" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Unjail
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query Blockchain State -->
+        <div class="bg-gray-700 p-6 rounded-lg">
+            <h2 class="text-2xl font-bold text-indigo-300 section-header">Query Blockchain State</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Get Balance -->
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Get Balance</h3>
+                    <input type="text" id="balanceAddress" placeholder="Address" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="getBalanceButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Get
+                    </button>
+                </div>
+                <!-- Get Nonce -->
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Get Nonce</h3>
+                    <input type="text" id="nonceAddress" placeholder="Address" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="getNonceButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Get
+                    </button>
+                </div>
+                <!-- Get Block -->
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Get Block</h3>
+                    <input type="number" id="blockIndex" placeholder="Block Index" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="getBlockButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Get
+                    </button>
+                </div>
+                <!-- Get Contract State -->
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Get Contract State</h3>
+                    <input type="text" id="contractStateAddress" placeholder="Contract Address" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="getContractStateButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Get
+                    </button>
+                </div>
+            </div>
+            <div class="mt-6">
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2">Read-only Contract Call</h3>
+                    <input type="text" id="readContractAddress" placeholder="Contract Address" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="text" id="readMethod" placeholder="Method Name (e.g., getCount)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <input type="text" id="readParams" placeholder="Parameters (JSON array)" class="w-full p-2 mb-2 bg-gray-900 rounded-lg">
+                    <button id="readButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Read
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mining -->
+        <div class="bg-gray-700 p-6 rounded-lg text-center">
+            <h2 class="text-2xl font-bold text-indigo-300 section-header">Mining</h2>
+            <p class="text-gray-400 mb-4">Propose a new block to include pending transactions.</p>
+            <button id="mineButton" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                Mine Block
+            </button>
+        </div>
+
+        <!-- Logs -->
+        <div class="border-t border-gray-700 pt-6">
+            <h2 class="text-2xl font-bold text-indigo-300 section-header">Logs</h2>
+            <div id="logs" class="bg-gray-900 h-64 overflow-y-auto rounded-lg p-4 text-sm text-gray-300 font-mono">
+                Awaiting commands...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // NOTE: This UI is for local testing. In a real-world scenario, the API key would not be hardcoded,
+        // and transactions would be signed securely on the client side using a wallet provider.
+        const API_KEY = "a-very-secret-key"; 
+        const BASE_URL = "http://localhost:3001";
+        
+        let loadedWallet = null; // Stores the currently loaded wallet with its private key
+
+        // Helper function for logging to the UI div
+        function logToDiv(message, colorClass = 'log-default') {
+            const logsDiv = document.getElementById('logs');
+            const p = document.createElement('p');
+            p.className = `p-1 ${colorClass}`;
+            p.textContent = `> ${message}`;
+            logsDiv.appendChild(p);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+            console.log(message); // Also log to browser console for debugging
+        }
+
+        // Helper for API calls
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'x-api-key': API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: body ? JSON.stringify(body) : null
+                };
+                const response = await fetch(`${BASE_URL}${endpoint}`, options);
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || JSON.stringify(data));
+                }
+                return data;
+            } catch (error) {
+                logToDiv(`API Error: ${error.message}`, 'log-error');
+                return null;
+            }
+        }
+
+        // --- Wallet Functions (Simplified for Browser Testing) ---
+
+        // This is a simplified version of createWallet from src/wallet.ts for browser compatibility
+        function createWalletBrowser() {
+            // In a real browser environment, you'd use a library like 'elliptic' or 'noble-secp256k1'
+            // to generate keys. For this test UI, we'll simulate it or rely on the node's API.
+            // Since the node has a /create-wallet API, we'll use that for simplicity.
+            // This function is mostly a placeholder for what would be client-side key generation.
+            logToDiv("Wallet creation handled by node's /create-wallet API. No client-side key generation here.", 'log-info');
+            return null; // The actual wallet details come from the API response
+        }
+
+        // This is a simplified version of generateAddress from src/wallet.ts for browser compatibility
+        function generateAddressBrowser(publicKey) {
+            // Simplified hashing for browser context
+            const hash = CryptoJS.SHA256(publicKey).toString(CryptoJS.enc.Hex);
+            return `0x${hash.slice(0, 40)}`;
+        }
+
+        // This is a simplified version of signTransaction from src/wallet.ts for browser compatibility
+        function signTransactionBrowser(privateKey, payload) {
+            // In a real browser environment, you'd use a library like 'elliptic' or 'noble-secp256k1'
+            // to sign. For this test UI, we'll use a dummy signature for now,
+            // or if we have a loaded private key, we'd integrate a proper signing lib.
+            // For now, we'll use a placeholder as the node will verify against the actual public key.
+            // This function needs a real crypto library for actual signing.
+            // For the purpose of getting the UI working with the node's validation,
+            // we will use a placeholder and rely on the node's validation.
+            // If `loadedWallet.privateKey` is available, this is where actual signing would happen.
+            if (loadedWallet && loadedWallet.privateKey) {
+                // This is where a real crypto library (e.g., noble-secp256k1) would be used
+                // For now, we'll just return a dummy signature.
+                // console.warn("WARNING: Using dummy signature. Implement real client-side signing for full functionality.");
+                return "signed-by-loaded-wallet-" + CryptoJS.SHA256(payload + privateKey).toString(CryptoJS.enc.Hex);
+            }
+            return "dummy-signature"; // Fallback for when no wallet is loaded or for the mine button's hardcoded proposer
+        }
+
+        // This is a simplified version of getTransactionPayload from src/Transaction.ts
+        function getTransactionPayloadBrowser(tx) {
+            const dataString = tx.data !== undefined ? JSON.stringify(tx.data) : '';
+            const payload = `${tx.type}:${tx.from}:${tx.to}:${tx.amount}:${tx.fee}:${tx.nonce}:${tx.timestamp}:${dataString}:${tx.publicKey}`;
+            return payload;
+        }
+
+        // This is a simplified version of decryptPrivateKey from src/wallet.ts for browser compatibility
+        function decryptPrivateKeyBrowser(encryptedPrivateKey, passphrase) {
+            try {
+                const bytes = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase);
+                const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+                if (!decrypted) {
+                    throw new Error("Decryption failed. Incorrect passphrase.");
+                }
+                return decrypted;
+            } catch (e) {
+                throw new Error("Decryption failed or incorrect passphrase.");
+            }
+        }
+
+        // --- UI Event Listeners ---
+
+        document.getElementById('getStatusButton').addEventListener('click', async () => {
+            logToDiv('--- Fetching Node Status ---', 'log-info');
+            const status = await apiCall('/status');
+            if (status) {
+                logToDiv('Status fetched successfully:', 'log-success');
+                logToDiv(JSON.stringify(status, null, 2), 'log-default');
+            }
+        });
+
+        document.getElementById('getLatestBlockButton').addEventListener('click', async () => {
+            logToDiv('--- Fetching Latest Block ---', 'log-info');
+            const block = await apiCall('/latestBlock');
+            if (block) {
+                logToDiv(`Latest Block (Index: ${block.index}) fetched successfully.`, 'log-success');
+                logToDiv(JSON.stringify(block, null, 2), 'log-default');
+            }
+        });
+        
+        document.getElementById('getMempoolButton').addEventListener('click', async () => {
+            logToDiv('--- Fetching Mempool Transactions ---', 'log-info');
+            const mempool = await apiCall('/mempool');
+            if (mempool) {
+                logToDiv(`Mempool fetched. Found ${mempool.pool.length} transactions.`, 'log-success');
+                logToDiv(JSON.stringify(mempool.pool, null, 2), 'log-default');
+            }
+        });
+
+        document.getElementById('createWalletButton').addEventListener('click', async () => {
+            logToDiv('--- Creating New Wallet (via Node API) ---', 'log-info');
+            const newWallet = await apiCall('/create-wallet', 'POST');
+            if (newWallet) {
+                logToDiv(`Wallet created by node: ${newWallet.address}`, 'log-success');
+                logToDiv(`Public Key: ${newWallet.publicKey.slice(0, 50)}...`, 'log-default');
+                // Note: The private key is NOT returned by the node's API for security.
+                // To use this wallet for signing, you'd typically save its JSON locally
+                // and then load it using the "Load Existing Wallet" section.
+            }
+        });
+        
+        document.getElementById('loadWalletButton').addEventListener('click', async () => {
+            const address = document.getElementById('loadWalletAddress').value;
+            const walletJsonStr = document.getElementById('loadWalletJson').value;
+            const passphrase = document.getElementById('loadWalletPassphrase').value;
+
+            if (!address || !walletJsonStr) {
+                logToDiv('Please provide wallet address and paste JSON content.', 'log-error');
+                return;
+            }
+
+            try {
+                const walletData = JSON.parse(walletJsonStr);
+                if (walletData.address !== address) {
+                    logToDiv('Wallet address in JSON does not match provided address.', 'log-error');
+                    return;
+                }
+
+                let privateKey = walletData.privateKey;
+                if (walletData.isEncrypted) {
+                    if (!passphrase) {
+                        logToDiv('Wallet is encrypted, but no passphrase provided.', 'log-error');
+                        return;
+                    }
+                    privateKey = decryptPrivateKeyBrowser(walletData.privateKey, passphrase);
+                    logToDiv('Wallet decrypted successfully.', 'log-success');
+                } else {
+                    logToDiv('WARNING: Loaded unencrypted wallet. For testing only!', 'log-warning');
+                }
+
+                // Set the global loadedWallet for signing
+                loadedWallet = {
+                    address: walletData.address,
+                    publicKey: walletData.publicKey,
+                    privateKey: privateKey,
+                    isEncrypted: false // It's decrypted now
+                };
+
+                document.getElementById('currentWalletAddress').textContent = loadedWallet.address;
+                logToDiv(`Wallet ${loadedWallet.address.slice(0, 10)}... loaded successfully for signing.`, 'log-success');
+
+                // Auto-fill transaction 'from' fields with the loaded wallet's address
+                fillFromAddressFields(loadedWallet.address);
+
+            } catch (e) {
+                logToDiv(`Error loading wallet: ${e.message}`, 'log-error');
+            }
+        });
+
+        function fillFromAddressFields(address) {
+            const fields = [
+                'transferFrom', 'deployFrom', 'callFrom', 'stakeFrom', 
+                'unstakeFrom', 'unjailAddress' // Unjail is also from a validator address
+            ];
+            fields.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.value = address;
+                    element.disabled = false; // Enable if it was disabled by default
+                }
+            });
+            // Query fields are not "from" fields, but often useful to pre-fill
+            document.getElementById('balanceAddress').value = address;
+            document.getElementById('nonceAddress').value = address;
+        }
+
+        // Helper to create a transaction object for sending to the API
+        async function createAndSignTransaction(type, from, to, amount, fee, data = {}) {
+            if (!loadedWallet || loadedWallet.address !== from) {
+                logToDiv(`Error: Wallet ${from.slice(0,10)}... is not currently loaded for signing. Please load it first.`, 'log-error');
+                return null;
+            }
+
+            const nonce = await apiCall(`/nonce/${from}`);
+            if (nonce === null) {
+                logToDiv(`Error: Failed to fetch nonce for ${from.slice(0,10)}....`, 'log-error');
+                return null;
+            }
+
+            const txDetails = {
+                type,
+                from,
+                to,
+                amount,
+                fee,
+                nonce: nonce.nonce, // Use the fetched nonce
+                timestamp: Date.now(),
+                data,
+                publicKey: loadedWallet.publicKey,
+            };
+
+            // Sign the transaction using the loaded private key
+            const payloadToSign = getTransactionPayloadBrowser(txDetails);
+            const signature = signTransactionBrowser(loadedWallet.privateKey, payloadToSign);
+
+            return { ...txDetails, signature };
+        }
+        
+        document.getElementById('transferButton').addEventListener('click', async () => {
+            const from = document.getElementById('transferFrom').value;
+            const to = document.getElementById('transferTo').value;
+            const amount = parseFloat(document.getElementById('transferAmount').value);
+            const fee = parseFloat(document.getElementById('transferFee').value);
+
+            if (!from || !to || isNaN(amount) || isNaN(fee)) {
+                logToDiv('Please fill in all transfer fields.', 'log-error');
+                return;
+            }
+
+            logToDiv(`--- Preparing Transfer from ${from.slice(0, 10)}... ---`, 'log-info');
+            const tx = await createAndSignTransaction('TRANSFER', from, to, amount, fee);
+            if (!tx) return; // Error handled by createAndSignTransaction
+
+            logToDiv(`--- Sending Transfer from ${from.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall('/transaction', 'POST', tx);
+            if (res) {
+                logToDiv(`Transfer transaction accepted: ${res.txId.slice(0, 10)}...`, 'log-success');
+            }
+        });
+        
+        document.getElementById('deployButton').addEventListener('click', async () => {
+            const from = document.getElementById('deployFrom').value;
+            const fee = parseFloat(document.getElementById('deployFee').value);
+            const contractClassName = document.getElementById('deployFile').value; // MyCounter
+            const code = document.getElementById('deployCode').value;
+
+            if (!from || isNaN(fee) || !code) {
+                logToDiv('Please fill in Deployer Address, Fee, and paste Contract Code.', 'log-error');
+                return;
+            }
+
+            logToDiv(`--- Preparing Deployment from ${from.slice(0, 10)}... ---`, 'log-info');
+            // For DEPLOY, 'to' address is generated by the node, so we use a placeholder
+            const tempTxDetails = {
+                type: 'DEPLOY',
+                from,
+                to: "0x" + "0".repeat(40), // Placeholder, node will assign
+                amount: 0, // No initial funds sent with deploy in this UI
+                fee,
+                nonce: 0, // Will be fetched
+                publicKey: loadedWallet ? loadedWallet.publicKey : 'dummy-publicKey',
+                data: { code, contractClassName }
+            };
+
+            const nonce = await apiCall(`/nonce/${from}`);
+            if (nonce === null) {
+                logToDiv(`Error: Failed to fetch nonce for ${from.slice(0,10)}....`, 'log-error');
+                return null;
+            }
+            tempTxDetails.nonce = nonce.nonce;
+
+            const payloadToSign = getTransactionPayloadBrowser(tempTxDetails);
+            const signature = signTransactionBrowser(loadedWallet.privateKey, payloadToSign);
+            const tx = { ...tempTxDetails, signature };
+
+            logToDiv(`--- Sending Deployment from ${from.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall('/transaction', 'POST', tx);
+            if (res) {
+                logToDiv(`Deployment transaction accepted. Contract address: ${res.contractAddress?.slice(0, 10)}...`, 'log-success');
+                document.getElementById('callContractAddress').value = res.contractAddress; // Auto-fill for testing
+                document.getElementById('readContractAddress').value = res.contractAddress; // Auto-fill for testing
+                document.getElementById('contractStateAddress').value = res.contractAddress; // Auto-fill for testing
+            }
+        });
+
+        document.getElementById('callButton').addEventListener('click', async () => {
+            const from = document.getElementById('callFrom').value;
+            const contractAddress = document.getElementById('callContractAddress').value;
+            const method = document.getElementById('callMethod').value;
+            const fee = parseFloat(document.getElementById('callFee').value);
+            const paramsStr = document.getElementById('callParams').value;
+            let params = [];
+
+            if (!from || !contractAddress || !method || isNaN(fee)) {
+                logToDiv('Please provide all required fields for contract call.', 'log-error');
+                return;
+            }
+            try {
+                if (paramsStr) {
+                    params = JSON.parse(paramsStr);
+                }
+            } catch (e) {
+                logToDiv('Invalid JSON format for parameters.', 'log-error');
+                return;
+            }
+
+            logToDiv(`--- Preparing Call to ${contractAddress.slice(0, 10)}... ---`, 'log-info');
+            const tx = await createAndSignTransaction('CALL', from, contractAddress, 0, fee, { method, params });
+            if (!tx) return;
+
+            logToDiv(`--- Sending Call to ${contractAddress.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall('/transaction', 'POST', tx);
+            if (res) {
+                logToDiv(`Contract call transaction accepted: ${res.txId.slice(0, 10)}...`, 'log-success');
+            }
+        });
+        
+        document.getElementById('mineButton').addEventListener('click', async () => {
+            logToDiv('--- Requesting Block Proposal ---', 'log-warning');
+            // For simplicity in UI, this still uses a hardcoded miner address and dummy keys.
+            // In a real scenario, the miner's wallet would need to be loaded/configured.
+            const proposerAddress = "0xe5bca44e2313297f074536a776e8732b275505b5"; // Bootstrap address as miner
+            const proposerPublicKey = "0000000000000000000000000000000000000000000000000000000000000000"; // Dummy for genesis
+            const blockHash = "dummy-hash"; // Node will calculate
+            const blockSignature = "dummy-signature"; // Node will verify if correct key is used
+
+            const res = await apiCall('/proposeBlock', 'POST', {
+                proposerAddress: proposerAddress,
+                proposerPublicKey: proposerPublicKey,
+                blockHash: blockHash, // This will be recalculated by the node
+                blockSignature: blockSignature, // This will be verified by the node
+                timestamp: Date.now()
+            });
+            if (res) {
+                logToDiv(`Block ${res.block.index} proposed by miner.`, 'log-success');
+                logToDiv(`Block Hash: ${res.block.hash.slice(0, 10)}...`, 'log-default');
+            }
+        });
+
+        // Staking Commands
+        document.getElementById('stakeButton').addEventListener('click', async () => {
+            const from = document.getElementById('stakeFrom').value;
+            const to = document.getElementById('stakeTo').value;
+            const amount = parseFloat(document.getElementById('stakeAmount').value);
+            const fee = parseFloat(document.getElementById('stakeFee').value);
+
+            if (!from || !to || isNaN(amount) || isNaN(fee)) {
+                logToDiv('Please fill in all staking fields.', 'log-error');
+                return;
+            }
+            logToDiv(`--- Preparing Stake from ${from.slice(0, 10)}... ---`, 'log-info');
+            const tx = await createAndSignTransaction('STAKE', from, to, amount, fee);
+            if (!tx) return;
+
+            logToDiv(`--- Sending Stake from ${from.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall('/transaction', 'POST', tx);
+            if (res) {
+                logToDiv(`Stake transaction accepted: ${res.txId.slice(0, 10)}...`, 'log-success');
+            }
+        });
+
+        document.getElementById('unstakeButton').addEventListener('click', async () => {
+            const from = document.getElementById('unstakeFrom').value;
+            const to = document.getElementById('unstakeFromValidator').value; // 'to' is validator address for unstake
+            const amount = parseFloat(document.getElementById('unstakeAmount').value);
+            const fee = parseFloat(document.getElementById('unstakeFee').value);
+            
+            if (!from || !to || isNaN(amount) || isNaN(fee)) {
+                logToDiv('Please fill in all unstaking fields.', 'log-error');
+                return;
+            }
+            logToDiv(`--- Preparing Unstake from ${from.slice(0, 10)}... ---`, 'log-info');
+            const tx = await createAndSignTransaction('UNSTAKE', from, to, amount, fee);
+            if (!tx) return;
+
+            logToDiv(`--- Sending Unstake from ${from.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall('/transaction', 'POST', tx);
+            if (res) {
+                logToDiv(`Unstake transaction accepted: ${res.txId.slice(0, 10)}...`, 'log-success');
+            }
+        });
+
+        document.getElementById('claimRewardsButton').addEventListener('click', async () => {
+            const from = document.getElementById('unstakeFrom').value; // 'from' is delegator address
+            const to = document.getElementById('unstakeFromValidator').value; // 'to' is validator address
+            const fee = parseFloat(document.getElementById('unstakeFee').value); // Fee is required for claim rewards
+            
+            if (!from || !to || isNaN(fee)) {
+                logToDiv('Please fill in Delegator, Validator, and Fee fields to claim rewards.', 'log-error');
+                return;
+            }
+            logToDiv(`--- Preparing Claim Rewards from ${from.slice(0, 10)}... ---`, 'log-info');
+            // Amount is 0 for CLAIM_REWARDS
+            const tx = await createAndSignTransaction('CLAIM_REWARDS', from, to, 0, fee);
+            if (!tx) return;
+
+            logToDiv(`--- Sending Claim Rewards from ${from.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall('/transaction', 'POST', tx);
+            if (res) {
+                logToDiv(`Claim Rewards transaction accepted: ${res.txId.slice(0, 10)}...`, 'log-success');
+            }
+        });
+
+        document.getElementById('unjailButton').addEventListener('click', async () => {
+            const address = document.getElementById('unjailAddress').value;
+            if (!address) {
+                logToDiv('Please enter a validator address to unjail.', 'log-error');
+                return;
+            }
+            logToDiv(`--- Attempting to unjail validator ${address.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall('/unjail', 'POST', { address });
+            if (res && res.success) {
+                logToDiv(`Validator ${address.slice(0, 10)}... unjailed successfully.`, 'log-success');
+            } else {
+                logToDiv(`Failed to unjail validator: ${res?.error || 'Unknown error'}`, 'log-error');
+            }
+        });
+
+        // Query Commands
+        document.getElementById('getBalanceButton').addEventListener('click', async () => {
+            const address = document.getElementById('balanceAddress').value;
+            if (!address) {
+                logToDiv('Please enter an address to check the balance.', 'log-error');
+                return;
+            }
+            logToDiv(`--- Fetching Balance for ${address.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall(`/balance/${address}`);
+            if (res) {
+                logToDiv(`Balance for ${res.address}: ${res.balance}`, 'log-success');
+            }
+        });
+
+        document.getElementById('getNonceButton').addEventListener('click', async () => {
+            const address = document.getElementById('nonceAddress').value;
+            if (!address) {
+                logToDiv('Please enter an address to get the nonce.', 'log-error');
+                return;
+            }
+            logToDiv(`--- Fetching Nonce for ${address.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall(`/nonce/${address}`);
+            if (res) {
+                logToDiv(`Nonce for ${res.address}: ${res.nonce}`, 'log-success');
+            }
+        });
+        
+        document.getElementById('getBlockButton').addEventListener('click', async () => {
+            const index = document.getElementById('blockIndex').value;
+            if (!index) {
+                logToDiv('Please enter a block index.', 'log-error');
+                return;
+            }
+            logToDiv(`--- Fetching Block ${index} ---`, 'log-info');
+            const res = await apiCall(`/blocks/${index}`);
+            if (res) {
+                logToDiv(`Block ${res.index} fetched. Hash: ${res.hash.slice(0, 10)}...`, 'log-success');
+                logToDiv(JSON.stringify(res, null, 2), 'log-default');
+            }
+        });
+
+        document.getElementById('getContractStateButton').addEventListener('click', async () => {
+            const address = document.getElementById('contractStateAddress').value;
+            if (!address) {
+                logToDiv('Please enter a contract address.', 'log-error');
+                return;
+            }
+            logToDiv(`--- Fetching Contract State for ${address.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall(`/contract/${address}`);
+            if (res) {
+                logToDiv(`Contract state for ${res.address}:`, 'log-success');
+                logToDiv(JSON.stringify(res.storage, null, 2), 'log-default');
+            }
+        });
+
+        document.getElementById('readButton').addEventListener('click', async () => {
+            const contractAddress = document.getElementById('readContractAddress').value;
+            const method = document.getElementById('readMethod').value;
+            const paramsStr = document.getElementById('readParams').value;
+            let params = [];
+
+            if (!contractAddress || !method) {
+                logToDiv('Please provide a contract address and method name.', 'log-error');
+                return;
+            }
+            try {
+                if (paramsStr) {
+                    params = JSON.parse(paramsStr);
+                }
+            } catch (e) {
+                logToDiv('Invalid JSON format for parameters.', 'log-error');
+                return;
+            }
+
+            logToDiv(`--- Reading from Contract ${contractAddress.slice(0, 10)}... ---`, 'log-info');
+            const res = await apiCall(`/contract/${contractAddress}/call/${method}?args=${JSON.stringify(params)}`);
+            if (res) {
+                logToDiv('Read-only call successful:', 'log-success');
+                logToDiv(JSON.stringify(res, null, 2), 'log-default');
+            }
+        });
+        
+        // Initial log message
+        logToDiv('UI loaded. Ensure your node is running and use the buttons to interact.', 'log-info');
+
+    </script>
+</body>
+</html>

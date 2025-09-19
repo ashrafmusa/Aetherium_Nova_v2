@@ -1,0 +1,191 @@
+2025-08-06 06:41:08 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-06 06:41:08 [32minfo[39m: 🚀 Node running at http://localhost:3001
+2025-08-06 06:41:08 [32minfo[39m: [Chain] No chain file found. Creating genesis state.
+2025-08-06 06:41:08 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-06 06:41:08 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-06 06:41:08 [32minfo[39m: [Staking] In-memory staking ledger cleared.
+2025-08-06 06:41:08 [32minfo[39m: [Ledger Rebuild] Applied genesis pre-mine and validator stake.
+2025-08-06 06:41:08 [32minfo[39m: [Ledger] Starting ledger rebuild from chain...
+2025-08-06 06:41:08 [32minfo[39m: [Ledger] Rebuild complete.
+2025-08-06 06:41:08 [32minfo[39m: [Chain] Chain saved to disk.
+2025-08-06 06:41:08 [32minfo[39m: [Ledger] State snapshot saved to disk.
+2025-08-06 06:41:08 [32minfo[39m: [Staking] Staking ledger snapshot saved to disk.
+2025-08-06 06:41:08 [32minfo[39m: [Chain] Genesis block created and initial state saved.
+2025-08-06 06:41:08 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-06 06:41:08 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-06 06:42:04 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 06:42:04 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-06 06:42:04 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 06:42:04 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-06 06:45:46 [32minfo[39m: [API] Created new temporary wallet: 0x076f773adc2c94048fa6ef14f0e255cc7e39f9df
+2025-08-06 06:53:49 [33mwarn[39m: [TxValidation] Rejected transaction: 'from' address does not match public key. Tx.from: 0xe5bca44e2313297f074536a776e8732b275505b5, Derived: 0x9ac091ec2f8d05f3d7d9d848cd75c6cf6f343281
+2025-08-06 06:53:49 [33mwarn[39m: [Mempool] Rejected invalid transaction from 0xe5bca44e2313297f074536a776e8732b275505b5. TxId: 3b3cefd600a2f27591afc31ff4984d500f62953bb9a6bcee3bc4d64e3708c649
+2025-08-06 06:53:49 [33mwarn[39m: [API] Transaction rejected: Invalid transaction signature or structure.
+2025-08-06 07:05:31 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 07:05:31 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-06 07:05:31 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 07:05:31 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-06 07:07:31 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 07:07:31 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-06 07:07:31 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 07:07:31 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-06 07:07:44 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 07:07:44 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-06 07:07:44 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 07:07:44 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-06 07:07:44 [31merror[39m: [31mError Unexpected Error:[39m
+2025-08-06 07:10:16 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 07:10:16 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-06 07:10:16 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 07:10:16 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-06 07:11:00 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 07:11:00 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-06 07:11:00 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-06 07:11:00 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-06 07:11:00 [31merror[39m: [31mError Unexpected Error:[39m
+2025-08-07 00:29:55 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:29:55 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-07 00:29:55 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:29:55 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-07 00:30:16 [31merror[39m: [31mError Unexpected Error:[39m
+2025-08-07 00:30:33 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:30:33 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-07 00:30:33 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:30:33 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-07 00:30:40 [32minfo[39m: SIGINT received. Saving state and shutting down...
+2025-08-07 00:31:35 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-07 00:31:35 [32minfo[39m: 🚀 Node running at http://localhost:3001
+2025-08-07 00:31:35 [32minfo[39m: [Chain] No chain file found. Creating genesis state.
+2025-08-07 00:31:35 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-07 00:31:35 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-07 00:31:35 [32minfo[39m: [Staking] In-memory staking ledger cleared.
+2025-08-07 00:31:35 [32minfo[39m: [Ledger Rebuild] Applied genesis pre-mine and validator stake.
+2025-08-07 00:31:35 [32minfo[39m: [Ledger] Starting ledger rebuild from chain...
+2025-08-07 00:31:35 [32minfo[39m: [Ledger] Rebuild complete.
+2025-08-07 00:31:35 [32minfo[39m: [Chain] Chain saved to disk.
+2025-08-07 00:31:35 [32minfo[39m: [Ledger] State snapshot saved to disk.
+2025-08-07 00:31:35 [32minfo[39m: [Staking] Staking ledger snapshot saved to disk.
+2025-08-07 00:31:35 [32minfo[39m: [Chain] Genesis block created and initial state saved.
+2025-08-07 00:31:35 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-07 00:31:35 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-07 00:31:55 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:31:55 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-07 00:31:55 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:31:55 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-07 00:32:12 [31merror[39m: [31mError Unexpected Error:[39m
+2025-08-07 00:33:43 [32minfo[39m: SIGINT received. Saving state and shutting down...
+2025-08-07 00:34:59 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:34:59 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-07 00:34:59 [32minfo[39m: 🚀 Node running at http://localhost:3001
+2025-08-07 00:34:59 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-07 00:34:59 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-07 00:34:59 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-07 00:34:59 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:34:59 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-07 00:35:07 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:35:07 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-07 00:35:07 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:35:07 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-07 00:35:28 [32minfo[39m: [Mempool] Transaction 6dce8e0af52690644d710b6b5dc09147758c875d4f1081c81030f6223a4e88c4 added to pool.
+2025-08-07 00:35:47 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:35:47 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-07 00:35:47 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 00:35:47 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-07 00:35:54 [32minfo[39m: [Staking] Starting new epoch 0. Re-calculating validator set.
+2025-08-07 00:35:54 [32minfo[39m: [Staking] Epoch 0 validator set updated. 1 active validators.
+2025-08-07 00:35:54 [32minfo[39m: [API] Received propose request for proposer: 0xe5bca44e2313297f074536a776e8732b275505b5
+2025-08-07 00:35:54 [31merror[39m: [Chain] Proposed block rejected: invalid signature.
+2025-08-07 00:35:54 [31merror[39m: [API] Block proposal failed for 0xe5bca44e2313297f074536a776e8732b275505b5.
+2025-08-07 00:40:59 [32minfo[39m: [Mempool] Pruned 1 expired transaction(s).
+2025-08-07 11:53:10 [32minfo[39m: SIGINT received. Saving state and shutting down...
+2025-08-07 12:35:11 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-07 12:35:11 [32minfo[39m: [Chain] No chain file found. Creating genesis state.
+2025-08-07 12:35:11 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-07 12:35:11 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-07 12:35:11 [32minfo[39m: [Staking] In-memory staking ledger cleared.
+2025-08-07 12:35:11 [32minfo[39m: [Ledger Rebuild] Applied genesis pre-mine and validator stake.
+2025-08-07 12:35:11 [32minfo[39m: [Ledger] Starting ledger rebuild from chain...
+2025-08-07 12:35:11 [32minfo[39m: [Ledger] Rebuild complete.
+2025-08-07 12:35:11 [32minfo[39m: [Chain] Chain saved to disk.
+2025-08-07 12:35:11 [32minfo[39m: [Ledger] State snapshot saved to disk.
+2025-08-07 12:35:11 [32minfo[39m: [Staking] Staking ledger snapshot saved to disk.
+2025-08-07 12:35:11 [32minfo[39m: [Chain] Genesis block created and initial state saved.
+2025-08-07 12:35:11 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-07 12:35:11 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-07 12:39:14 [32minfo[39m: SIGINT received. Saving state and shutting down...
+2025-08-07 12:39:50 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-07 12:39:50 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-07 12:39:50 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-07 12:39:50 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-07 12:39:50 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 12:39:50 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-07 12:41:07 [32minfo[39m: SIGINT received. Saving state and shutting down...
+2025-08-07 12:47:59 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-07 12:47:59 [32minfo[39m: [Chain] No chain file found. Creating genesis state.
+2025-08-07 12:47:59 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-07 12:47:59 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-07 12:47:59 [32minfo[39m: [Staking] In-memory staking ledger cleared.
+2025-08-07 12:47:59 [32minfo[39m: [Ledger Rebuild] Applied genesis pre-mine and validator stake.
+2025-08-07 12:47:59 [32minfo[39m: [Ledger] Starting ledger rebuild from chain...
+2025-08-07 12:47:59 [32minfo[39m: [Ledger] Rebuild complete.
+2025-08-07 12:47:59 [32minfo[39m: [Chain] Chain saved to disk.
+2025-08-07 12:47:59 [32minfo[39m: [Ledger] State snapshot saved to disk.
+2025-08-07 12:47:59 [32minfo[39m: [Staking] Staking ledger snapshot saved to disk.
+2025-08-07 12:47:59 [32minfo[39m: [Chain] Genesis block created and initial state saved.
+2025-08-07 12:47:59 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-07 12:47:59 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-07 13:01:04 [32minfo[39m: SIGINT received. Saving state and shutting down...
+2025-08-07 13:01:35 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-07 13:01:35 [32minfo[39m: [Chain] No chain file found. Creating genesis state.
+2025-08-07 13:01:35 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-07 13:01:35 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-07 13:01:35 [32minfo[39m: [Staking] In-memory staking ledger cleared.
+2025-08-07 13:01:35 [32minfo[39m: [Ledger Rebuild] Applied genesis pre-mine and validator stake.
+2025-08-07 13:01:35 [32minfo[39m: [Ledger] Starting ledger rebuild from chain...
+2025-08-07 13:01:35 [32minfo[39m: [Ledger] Rebuild complete.
+2025-08-07 13:01:35 [32minfo[39m: [Chain] Chain saved to disk.
+2025-08-07 13:01:35 [32minfo[39m: [Ledger] State snapshot saved to disk.
+2025-08-07 13:01:35 [32minfo[39m: [Staking] Staking ledger snapshot saved to disk.
+2025-08-07 13:01:35 [32minfo[39m: [Chain] Genesis block created and initial state saved.
+2025-08-07 13:01:35 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-07 13:01:35 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-07 13:01:37 [32minfo[39m: SIGINT received. Saving state and shutting down...
+2025-08-07 13:05:42 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-07 13:05:42 [32minfo[39m: [Chain] No chain file found. Creating genesis state.
+2025-08-07 13:05:42 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-07 13:05:42 [32minfo[39m: [Ledger] In-memory ledger cleared.
+2025-08-07 13:05:42 [32minfo[39m: [Staking] In-memory staking ledger cleared.
+2025-08-07 13:05:42 [32minfo[39m: [Ledger Rebuild] Applied genesis pre-mine and validator stake.
+2025-08-07 13:05:42 [32minfo[39m: [Ledger] Starting ledger rebuild from chain...
+2025-08-07 13:05:42 [32minfo[39m: [Ledger] Rebuild complete.
+2025-08-07 13:05:42 [32minfo[39m: [Chain] Chain saved to disk.
+2025-08-07 13:05:42 [32minfo[39m: [Ledger] State snapshot saved to disk.
+2025-08-07 13:05:42 [32minfo[39m: [Staking] Staking ledger snapshot saved to disk.
+2025-08-07 13:05:42 [32minfo[39m: [Chain] Genesis block created and initial state saved.
+2025-08-07 13:05:42 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-07 13:05:42 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-07 13:07:59 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-07 13:07:59 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-07 13:07:59 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-07 13:07:59 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-07 13:07:59 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 13:07:59 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-07 13:09:21 [32minfo[39m: SIGINT received. Saving state and shutting down...
+2025-08-07 18:30:45 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-07 18:30:45 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-07 18:30:45 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-07 18:30:45 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-07 18:30:45 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 18:30:45 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-07 18:36:24 [32minfo[39m: SIGINT received. Saving state and shutting down...
+2025-08-07 19:05:26 [32minfo[39m: [Network] Starting sync with peers...
+2025-08-07 19:05:26 [32minfo[39m: 🚀 Node running at http://localhost:3001
+2025-08-07 19:05:26 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
+2025-08-07 19:05:26 [32minfo[39m: [Network] Peer synchronization complete.
+2025-08-07 19:05:26 [32minfo[39m: [Ledger] State snapshot loaded from disk.
+2025-08-07 19:05:26 [32minfo[39m: [Staking] Staking ledger snapshot loaded from disk.
+2025-08-07 19:05:26 [32minfo[39m: [Chain] Loaded 1 blocks from disk.
+2025-08-07 19:05:48 [32minfo[39m: [Mempool] Transaction 087f6cf368ec75a1882c9daa68806008a9cca5091f1da2b9c93d9323b18ccf45 added to pool.
+2025-08-07 19:07:43 [31merror[39m: [31mError mining block API Error (Status: 400):[39m
+2025-08-07 19:11:26 [32minfo[39m: [Mempool] Pruned 1 expired transaction(s).
+2025-08-08 00:04:49 [32minfo[39m: SIGINT received. Saving state and shutting down...

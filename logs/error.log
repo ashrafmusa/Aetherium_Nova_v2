@@ -1,0 +1,7 @@
+2025-08-06 07:07:44 [31merror[39m: [31mError Unexpected Error:[39m
+2025-08-06 07:11:00 [31merror[39m: [31mError Unexpected Error:[39m
+2025-08-07 00:30:16 [31merror[39m: [31mError Unexpected Error:[39m
+2025-08-07 00:32:12 [31merror[39m: [31mError Unexpected Error:[39m
+2025-08-07 00:35:54 [31merror[39m: [Chain] Proposed block rejected: invalid signature.
+2025-08-07 00:35:54 [31merror[39m: [API] Block proposal failed for 0xe5bca44e2313297f074536a776e8732b275505b5.
+2025-08-07 19:07:43 [31merror[39m: [31mError mining block API Error (Status: 400):[39m

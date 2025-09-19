@@ -1,0 +1,18 @@
+{
+  "balances": [
+    [
+      "0xe5bca44e2313297f074536a776e8732b275505b5",
+      999999995000000
+    ]
+  ],
+  "nonces": [
+    [
+      "0xe5bca44e2313297f074536a776e8732b275505b5",
+      0
+    ]
+  ],
+  "contractCode": [],
+  "contractStorage": [],
+  "contractEvents": [],
+  "unbondingDelegations": []
+}

@@ -1,0 +1,21 @@
+// tsconfig.vm-base.json
+{
+  "compilerOptions": {
+    "target": "ES2015",
+    "module": "None",
+    "moduleResolution": "Classic",
+    "outFile": "./dist/SmartContract.js",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": false,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src/contracts"
+    ]
+  },
+  "include": [
+    "src/SmartContract.ts"
+  ]
+}

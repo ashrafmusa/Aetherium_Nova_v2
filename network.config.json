@@ -1,0 +1,6 @@
+{
+  "defaultPort": 3001,
+  "seedPeers": [
+    "http://localhost:3002"
+  ]
+}

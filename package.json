@@ -1,0 +1,79 @@
+{
+  "name": "aetherium-nova",
+  "version": "2.0.0",
+  "description": "Aetherium Nova Blockchain Node and CLI",
+  "main": "dist/node.js",
+  "type": "module",
+  "scripts": {
+    "start": "node -r dotenv/config --experimental-specifier-resolution=node --trace-warnings dist/node.js",
+    "cli": "node -r dotenv/config --experimental-specifier-resolution=node dist/cli.js",
+    "build": "npm run clean && npm run build-main && npm run build-vm-base && npm run build-contracts",
+    "build-main": "tsc --project tsconfig.json",
+    "build-contracts": "node esbuild-contracts.mjs",
+    "build-vm-base": "tsc --project tsconfig.vm-base.json",
+    "clean": "rimraf dist",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --detectOpenHandles"
+  },
+  "keywords": [
+    "blockchain",
+    "cryptocurrency",
+    "smart contracts",
+    "PoS",
+    "node.js",
+    "cli"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/inquirer": "^9.0.3",
+    "axios": "^1.7.2",
+    "body-parser": "^1.20.2",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.2.0",
+    "inquirer": "^9.3.7",
+    "isolated-vm": "^5.0.4",
+    "ora": "^8.0.1",
+    "prom-client": "^15.1.2",
+    "winston": "^3.13.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@types/body-parser": "^1.19.5",
+    "@types/cors": "^2.8.17",
+    "@types/crypto-js": "^4.2.2",
+    "@types/express": "^4.17.21",
+    "@types/inquirer": "^9.0.3",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.19.10",
+    "@typescript-eslint/eslint-plugin": "^7.11.0",
+    "@typescript-eslint/parser": "^7.11.0",
+    "esbuild": "^0.21.5",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "rimraf": "^5.0.7",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "jest": {
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
+    "preset": "ts-jest/presets/default-esm",
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    },
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/dist/"
+    ]
+  }
+}

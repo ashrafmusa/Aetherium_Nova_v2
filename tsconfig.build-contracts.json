@@ -1,0 +1,21 @@
+// tsconfig.build-contracts.json
+{
+  "compilerOptions": {
+    "target": "ES2015",
+    "module": "None",
+    "moduleResolution": "Classic",
+    "outFile": "./dist/contracts-cjs/contracts.js",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": false,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "typeRoots": [
+      "./node_modules/@types"
+    ]
+  },
+  "include": [
+    "src/SmartContract.ts",
+    "src/contracts/**/*.ts"
+  ]
+}

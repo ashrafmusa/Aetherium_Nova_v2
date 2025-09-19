@@ -1,0 +1,24 @@
+{
+  "validators": [
+    [
+      "0xe5bca44e2313297f074536a776e8732b275505b5",
+      {
+        "address": "0xe5bca44e2313297f074536a776e8732b275505b5",
+        "totalStake": 5000000,
+        "delegators": [
+          [
+            "0xe5bca44e2313297f074536a776e8732b275505b5",
+            {
+              "address": "0xe5bca44e2313297f074536a776e8732b275505b5",
+              "amount": 5000000,
+              "rewards": 0
+            }
+          ]
+        ],
+        "jailed": false,
+        "slashCount": 0,
+        "publicKey": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  ]
+}

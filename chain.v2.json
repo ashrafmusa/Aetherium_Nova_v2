@@ -1,0 +1,16 @@
+{
+  "version": "2.0",
+  "chain": [
+    {
+      "index": 0,
+      "previousHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 1678886400000,
+      "data": [],
+      "proposer": "0xe5bca44e2313297f074536a776e8732b275505b5",
+      "proposerPublicKey": "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEq9cO+6/i+k9hT4gC/dK9c/FfE+15/qJd\npR1c0yQ3/w4fJ+V1F/u0fK3rC3f+16u7/z48/c/q/q/q/q/q/q/q/q/q/q/q/q/q\n-----END PUBLIC KEY-----\n",
+      "hash": "fee7ac9c2a9c9e6312ef23e51d9c047ecd9ec7368fc946fccf5378fd9408a1da",
+      "signature": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "shardId": 0
+    }
+  ]
+}
