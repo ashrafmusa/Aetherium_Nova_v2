@@ -204,3 +204,5 @@
 2025-09-19 10:49:38 [32minfo[39m: [Chain] Genesis block created and initial state saved.
 2025-09-19 10:49:38 [33mwarn[39m: [Network] Failed to sync with peer http://localhost:3002: .
 2025-09-19 10:49:38 [32minfo[39m: [Network] Peer synchronization complete.
+2025-09-19 11:07:59 [32minfo[39m: [API] Created new temporary wallet: 0xd38c6988553ebf37c4056feaad328ef7cc25f95a
+2025-09-19 15:53:57 [32minfo[39m: SIGINT received. Saving state and shutting down...
