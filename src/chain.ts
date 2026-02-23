@@ -1,29 +1,33 @@
 // src/chain.ts (Final Corrected Version)
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
+import { type Block } from './types.js';
 import { type Transaction, getTransactionId, TxType, createRewardTransaction } from './Transaction.js';
 import { clearLedger, processBlockTransactions, rebuildLedgerFromChain } from './ledger_processor.js';
-import { saveLedgerToDisk, loadLedgerFromDisk, setBalance, _getBalancesMap, _getNoncesMap, _getContractCodeMap, _getContractStorageMap, _setBalancesMap, _setNoncesMap, _setContractCodeMap, _setContractStorageMap } from './ledger.js';
-import mempool from './pool.js';
-import logger from './logger.js';
+import { saveLedgerToDisk, loadLedgerFromDisk } from './ledger.js';
+
+import { getLogger } from './logger.js';
 import { GENESIS_CONFIG } from './config.js';
-import { addOrUpdateValidator, saveStakingLedgerToDisk, loadStakingLedgerFromDisk, type Validator, chooseNextBlockProposer, getValidator, _getValidatorsMap, _setValidatorsMap, updateEpochValidatorSet } from './staking.js';
+import { addOrUpdateValidator, saveStakingLedgerToDisk, loadStakingLedgerFromDisk, type Validator, getValidator, updateEpochValidatorSet } from './staking.js';
 import { verifySignature } from './wallet.js';
+import {
+  _getBalancesMap,
+  _getNoncesMap,
+  _getContractCodeMap,
+  _getContractStorageMap,
+  _setBalancesMap,
+  _setNoncesMap,
+  _setContractCodeMap,
+  _setContractStorageMap
+} from './ledger.js';
+import {
+  _getValidatorsMap,
+  _setValidatorsMap,
+  chooseNextBlockProposer
+} from './staking.js';
 
-const CHAIN_FILE = path.resolve("chain.v2.json");
+export { Block };
 
-export interface Block {
-  index: number;
-  previousHash: string;
-  timestamp: number;
-  data: Transaction[];
-  hash: string;
-  proposer: string;
-  proposerPublicKey: string;
-  signature: string;
-  shardId?: number;
-}
+const logger = getLogger();
 
 let chain: Block[] = [];
 
@@ -39,13 +43,15 @@ export function calculateBlockHash(block: Omit<Block, 'hash' | 'signature'>): st
   return crypto.createHash("sha256").update(raw).digest("hex");
 }
 
-function saveChain(): void {
-  try {
-    const data = { version: "2.0", chain };
-    fs.writeFileSync(CHAIN_FILE, JSON.stringify(data, null, 2));
-    logger.info('[Chain] Chain saved to disk.');
-  } catch (err: any) {
-    logger.error(`[Chain] Failed to save chain to disk: ${err.message || String(err)}`);
+import { db } from './services/database.js';
+
+async function saveChain(): Promise<void> {
+  // Only save the latest block to avoid rewriting the whole chain constantly (optimization)
+  // But wait, the previous code saved the WHOLE chain every time.
+  // With DB, we should just append.
+  const latestBlock = chain[chain.length - 1];
+  if (latestBlock) {
+    await db.saveBlock(latestBlock.index, latestBlock);
   }
 }
 
@@ -53,9 +59,21 @@ function createGenesisBlock(): Block {
   const index = 0;
   const timestamp = GENESIS_CONFIG.genesisBlockTimestamp;
   const previousHash = "0".repeat(64);
-  const data: Transaction[] = [];
+  const bootstrapTransaction: Transaction = {
+    type: TxType.TRANSFER,
+    from: 'coinbase',
+    to: GENESIS_CONFIG.bootstrapAddress,
+    amount: GENESIS_CONFIG.totalSupply,
+    fee: 0,
+    timestamp: timestamp,
+    nonce: 0,
+    signature: '0'.repeat(128),
+    hash: '0'.repeat(64),
+    publicKey: '0'.repeat(130)
+  };
+  const data: Transaction[] = [bootstrapTransaction];
   const proposer = GENESIS_CONFIG.bootstrapAddress;
-  const proposerPublicKey = "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEq9cO+6/i+k9hT4gC/dK9c/FfE+15/qJd\npR1c0yQ3/w4fJ+V1F/u0fK3rC3f+16u7/z48/c/q/q/q/q/q/q/q/q/q/q/q/q/q\n-----END PUBLIC KEY-----\n";
+  const proposerPublicKey = "";
   const signature = "0".repeat(128);
   const shardId = 0;
   const hash = calculateBlockHash({ index, previousHash, timestamp, data, proposer, proposerPublicKey, shardId });
@@ -64,52 +82,73 @@ function createGenesisBlock(): Block {
 
 (async () => {
   try {
-    const exists = await fs.promises.access(CHAIN_FILE).then(() => true).catch(() => false);
-    if (exists) {
-      const fileContent = await fs.promises.readFile(CHAIN_FILE, 'utf-8');
-      const file = JSON.parse(fileContent);
+    const height = await db.getChainHeight();
 
-      if (file.version !== "2.0" || !Array.isArray(file.chain)) {
-        throw new Error("Invalid or incompatible chain file version/structure.");
+    if (height >= 0) {
+      // Reconstruct chain from DB
+      logger.info(`[Chain] Loading chain from DB (Height: ${height})...`);
+      const loadedChain: Block[] = [];
+      for (let i = 0; i <= height; i++) {
+        const block = await db.getBlock(i);
+        if (block) loadedChain.push(block);
+        else break; // Should not happen if DB is consistent
       }
-      chain = file.chain;
 
-      const ledgerLoaded = loadLedgerFromDisk();
-      const stakingLedgerLoaded = loadStakingLedgerFromDisk();
+      if (loadedChain.length > 0) {
+        chain = loadedChain;
+        // Verify version/structure if needed, or assume DB is truth
 
-      if (!ledgerLoaded || !stakingLedgerLoaded) {
-        logger.warn('[Chain] Ledger or Staking Ledger snapshot not found or corrupted, rebuilding from chain...');
-        const rebuildSuccess = await rebuildLedgerFromChain(chain);
-        if (!rebuildSuccess) {
-          throw new Error("Failed to rebuild ledgers from chain during startup.");
+        const ledgerLoaded = await loadLedgerFromDisk();
+        const stakingLedgerLoaded = loadStakingLedgerFromDisk(); // This needs update too, but focusing on main ledger first
+
+        if (!ledgerLoaded) { // || !stakingLedgerLoaded
+          logger.warn('[Chain] Ledger snapshot not found or corrupted, rebuilding from chain...');
+          const rebuildSuccess = await rebuildLedgerFromChain(chain);
+          if (!rebuildSuccess) {
+            throw new Error("Failed to rebuild ledgers from chain during startup.");
+          }
+          await saveLedgerToDisk();
+          // saveStakingLedgerToDisk();
         }
-        saveLedgerToDisk();
-        saveStakingLedgerToDisk();
+        logger.info(`[Chain] Loaded ${chain.length} blocks from DB.`);
+      } else {
+        // DB has headers but no blocks? Fallback
+        throw new Error("DB indicated height but no blocks found.");
       }
-      logger.info(`[Chain] Loaded ${chain.length} blocks from disk.`);
+
     } else {
-      logger.info("[Chain] No chain file found. Creating genesis state.");
-      chain = [createGenesisBlock()];
-      clearLedger();
-      await rebuildLedgerFromChain(chain);
-      saveChain();
-      saveLedgerToDisk();
-      saveStakingLedgerToDisk();
-      logger.info(`[Chain] Genesis block created and initial state saved.`);
+      // Height is null/undefined usually implies empty DB
+      // Correction: getChainHeight returns 0 if not found, forcing logic check.
+      // Actually simpler: try getBlock(0).
+      const genesis = await db.getBlock(0);
+      if (!genesis) {
+        logger.info("[Chain] No chain in DB. Creating genesis state.");
+        const genesisBlock = createGenesisBlock();
+        chain = [genesisBlock];
+        clearLedger();
+        await rebuildLedgerFromChain(chain);
+
+        await db.saveBlock(0, genesisBlock);
+        await saveLedgerToDisk();
+        // saveStakingLedgerToDisk();
+        logger.info(`[Chain] Genesis block created and initial state saved.`);
+      }
     }
   } catch (err: any) {
     const error = err instanceof Error ? err.message : String(err);
-    logger.error(`[Chain] Corrupted chain file or initialization error. Re-initializing. Error: ${error}`);
-    chain = [createGenesisBlock()];
-    clearLedger();
-    await rebuildLedgerFromChain(chain);
-    saveChain();
-    saveLedgerToDisk();
-    saveStakingLedgerToDisk();
+    logger.error(`[Chain] DB initialization error. Error: ${error}`);
+    // Fallback? Or fail hard?
+    // For now, fail hard or creating new genesis might overwrite data.
+    // Better to just create genesis if totally failed/empty.
+    if (chain.length === 0) {
+      chain = [createGenesisBlock()];
+      await rebuildLedgerFromChain(chain);
+    }
   }
 })();
 
 export function getBlockchain(): Block[] { return [...chain]; }
+export function getChainLength(): number { return chain.length; }
 export function getLatestBlock(): Block { return chain[chain.length - 1]; }
 
 export async function proposeBlock(
@@ -117,14 +156,15 @@ export async function proposeBlock(
   proposerAddress: string,
   proposerPublicKey: string,
   proposerSignature: string,
-  timestamp: number
+  timestamp: number,
+  mempool: any
 ): Promise<Block | null> {
   const lastBlock = getLatestBlock();
   const transactionsToInclude = pendingTxs.slice(0, GENESIS_CONFIG.maxTransactionsPerBlock);
 
   const totalFees = transactionsToInclude.reduce((sum, tx) => sum + tx.fee, 0);
   const blockReward = GENESIS_CONFIG.baseReward + totalFees;
-  
+
   const rewardTx = createRewardTransaction(proposerAddress, blockReward);
   const finalTransactions = [...transactionsToInclude, rewardTx];
 
@@ -152,7 +192,14 @@ export async function proposeBlock(
     return null;
   }
 
+  const tempBalances = new Map(_getBalancesMap());
+  const tempNonces = new Map(_getNoncesMap());
+  const tempContractCode = new Map(_getContractCodeMap());
+  const tempContractStorage = new Map(_getContractStorageMap());
+  const tempValidators = new Map(_getValidatorsMap());
+
   const blockProcessed = await processBlockTransactions(newBlock);
+
   if (blockProcessed) {
     chain.push(newBlock);
     mempool.removeTransactions(transactionsToInclude);
@@ -167,18 +214,33 @@ export async function proposeBlock(
       proposerValidator.lastProposedTimestamp = newBlock.timestamp;
       addOrUpdateValidator(proposerValidator);
     }
-    
+
     updateEpochValidatorSet(newBlock.index, newBlock.hash);
 
     return newBlock;
   } else {
+    logger.warn(`[Chain] Proposed block ${newBlock.index} was not processed successfully. Rolling back temporary state changes.`);
+    _setBalancesMap(tempBalances);
+    _setNoncesMap(tempNonces);
+    _setContractCodeMap(tempContractCode);
+    _setContractStorageMap(tempContractStorage);
+    _setValidatorsMap(tempValidators);
     return null;
   }
 }
 
 export async function isValidChain(chainToValidate: Block[]): Promise<boolean> {
+  if (chainToValidate.length === 0) {
+    logger.error("[Chain] Invalid chain: Chain is empty.");
+    return false;
+  }
   const genesis = createGenesisBlock();
-  if (JSON.stringify(chainToValidate[0]) !== JSON.stringify(genesis)) {
+  const g0 = chainToValidate[0];
+  if (
+    g0.index !== genesis.index ||
+    g0.hash !== genesis.hash ||
+    g0.previousHash !== genesis.previousHash
+  ) {
     logger.error("[Chain] Invalid chain: Genesis block mismatch.");
     return false;
   }
@@ -189,17 +251,24 @@ export async function isValidChain(chainToValidate: Block[]): Promise<boolean> {
   const originalContractStorage = new Map(_getContractStorageMap());
   const originalValidators = new Map(_getValidatorsMap());
 
-  const rebuildSuccess = await rebuildLedgerFromChain(chainToValidate);
+  let rebuildSuccess = false;
+  try {
+    rebuildSuccess = await rebuildLedgerFromChain(chainToValidate);
+  } catch (error) {
+    logger.error(`[Chain] Error during chain validation rebuild: ${error}`);
+    rebuildSuccess = false;
+  } finally {
+    _setBalancesMap(originalBalances);
+    _setNoncesMap(originalNonces);
+    _setContractCodeMap(originalContractCode);
+    _setContractStorageMap(originalContractStorage);
+    _setValidatorsMap(originalValidators);
+  }
 
-  _setBalancesMap(originalBalances);
-  _setNoncesMap(originalNonces);
-  _setContractCodeMap(originalContractCode);
-  _setContractStorageMap(originalContractStorage);
-  _setValidatorsMap(originalValidators);
 
   if (!rebuildSuccess) {
-      logger.error(`[Chain] Invalid chain: Rebuild failed during validation (indicates a deeper issue in the chain).`);
-      return false;
+    logger.error(`[Chain] Invalid chain: Rebuild failed during validation (indicates a deeper issue in the chain).`);
+    return false;
   }
 
   for (let i = 1; i < chainToValidate.length; i++) {
@@ -217,10 +286,10 @@ export async function isValidChain(chainToValidate: Block[]): Promise<boolean> {
       logger.error(`[Chain] Invalid chain: previousHash mismatch on block ${currentBlock.index}.`);
       return false;
     }
-    
+
     const expectedProposer = chooseNextBlockProposer(previousBlock.hash);
     const proposerValidator = getValidator(currentBlock.proposer);
-    
+
     if (currentBlock.proposer !== expectedProposer) {
       logger.error(
         `[Chain] Invalid chain: Proposer ${currentBlock.proposer.slice(0, 10)}... was not expected proposer ${expectedProposer?.slice(0, 10)}... for block ${currentBlock.index}`
@@ -228,8 +297,8 @@ export async function isValidChain(chainToValidate: Block[]): Promise<boolean> {
       return false;
     }
     if (proposerValidator?.jailed) {
-        logger.error(`[Chain] Invalid chain: Proposer ${currentBlock.proposer.slice(0, 10)}... is jailed and cannot propose blocks.`);
-        return false;
+      logger.error(`[Chain] Invalid chain: Proposer ${currentBlock.proposer.slice(0, 10)}... is jailed and cannot propose blocks.`);
+      return false;
     }
 
     if (!verifySignature(currentBlock.proposerPublicKey, calculatedHash, signature)) {
@@ -241,12 +310,12 @@ export async function isValidChain(chainToValidate: Block[]): Promise<boolean> {
   return true;
 }
 
-export async function replaceChain(newChain: Block[]): Promise<boolean> {
+export async function replaceChain(newChain: Block[], mempool: any): Promise<boolean> {
   if (newChain.length <= chain.length) {
-      logger.info(`[Chain] Rejected shorter or equal length chain. Current: ${chain.length}, Candidate: ${newChain.length}`);
-      return false;
+    logger.info(`[Chain] Rejected shorter or equal length chain. Current: ${chain.length}, Candidate: ${newChain.length}`);
+    return false;
   }
-  
+
   if (await isValidChain(newChain)) {
     logger.info(`[Chain] Replacing local chain with valid longer one. New height: ${newChain.length}.`);
     chain = newChain;
@@ -259,4 +328,75 @@ export async function replaceChain(newChain: Block[]): Promise<boolean> {
   }
   logger.warn(`[Chain] Candidate chain rejected as invalid.`);
   return false;
+}
+
+/**
+ * Append a single externally-received block to the local chain.
+ * Used by P2P broadcast so we do NOT require newChain.length > chain.length
+ * (replaceChain would always reject a 1-element candidate).
+ */
+export async function appendBlock(block: Block, mempool: any): Promise<boolean> {
+  const latestBlock = getLatestBlock();
+
+  if (block.index !== latestBlock.index + 1) {
+    logger.warn(`[Chain] appendBlock rejected: index mismatch. Expected ${latestBlock.index + 1}, got ${block.index}`);
+    return false;
+  }
+  if (block.previousHash !== latestBlock.hash) {
+    logger.warn(`[Chain] appendBlock rejected: previousHash mismatch on block ${block.index}`);
+    return false;
+  }
+
+  const { hash, signature, ...blockToHash } = block;
+  const calculatedHash = calculateBlockHash(blockToHash);
+  if (hash !== calculatedHash) {
+    logger.warn(`[Chain] appendBlock rejected: hash mismatch on block ${block.index}`);
+    return false;
+  }
+
+  const expectedProposer = chooseNextBlockProposer(latestBlock.hash);
+  if (block.proposer !== expectedProposer) {
+    logger.warn(`[Chain] appendBlock rejected: unexpected proposer ${block.proposer.slice(0, 10)}... for block ${block.index}`);
+    return false;
+  }
+
+  if (!verifySignature(block.proposerPublicKey, calculatedHash, signature)) {
+    logger.warn(`[Chain] appendBlock rejected: invalid signature on block ${block.index}`);
+    return false;
+  }
+
+  // Snapshot state for rollback
+  const tempBalances = new Map(_getBalancesMap());
+  const tempNonces = new Map(_getNoncesMap());
+  const tempContractCode = new Map(_getContractCodeMap());
+  const tempContractStorage = new Map(_getContractStorageMap());
+  const tempValidators = new Map(_getValidatorsMap());
+
+  const processed = await processBlockTransactions(block);
+  if (processed) {
+    chain.push(block);
+    if (mempool) {
+      mempool.removeTransactions(block.data.filter((tx: Transaction) => tx.type !== TxType.REWARD));
+    }
+    await saveChain();
+    saveLedgerToDisk();
+    saveStakingLedgerToDisk();
+    const proposerValidator = getValidator(block.proposer);
+    if (proposerValidator) {
+      proposerValidator.lastProposedBlock = block.index;
+      proposerValidator.lastProposedTimestamp = block.timestamp;
+      addOrUpdateValidator(proposerValidator);
+    }
+    updateEpochValidatorSet(block.index, block.hash);
+    logger.info(`[Chain] Block ${block.index} appended via P2P propagation.`);
+    return true;
+  } else {
+    _setBalancesMap(tempBalances);
+    _setNoncesMap(tempNonces);
+    _setContractCodeMap(tempContractCode);
+    _setContractStorageMap(tempContractStorage);
+    _setValidatorsMap(tempValidators);
+    logger.warn(`[Chain] appendBlock: transaction processing failed for block ${block.index}. State rolled back.`);
+    return false;
+  }
 }

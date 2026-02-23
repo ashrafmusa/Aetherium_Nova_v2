@@ -1,214 +1,138 @@
 
-import React from 'react';
-import type { Transaction, Block, Validator, NetworkState, UnsignedTransaction, NetworkStatsData, Stake } from '../types';
-import { generateKeyPair, getTransactionHash, sign, getBlockHash, calculateMerkleRoot, verify } from '../cryptoUtils';
-import { ServerIcon } from '../components/icons/ServerIcon';
+import { sha256 } from 'js-sha256';
+import type { Transaction, Block, Wallet, Validator, NetworkState, WalletState } from '../types.js';
+import { ec as EC } from 'elliptic';
 
-// --- INTERNAL STATE (SIMULATED BACKEND DATABASE) ---
+const ec = new EC('secp256k1');
+const API_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) || 'http://localhost:3002';
 
-const MOCK_VALIDATORS_DATA = [
-    // FIX: Replaced <ServerIcon /> with React.createElement(ServerIcon) to avoid JSX parsing errors in a .ts file.
-    { name: "Quantum Leap Validator", totalStake: 12_500_000, apr: 5.5, icon: React.createElement(ServerIcon) },
-    // FIX: Replaced <ServerIcon /> with React.createElement(ServerIcon) to avoid JSX parsing errors in a .ts file.
-    { name: "Cosmic Node Solutions", totalStake: 10_200_000, apr: 5.8, icon: React.createElement(ServerIcon) },
-    // FIX: Replaced <ServerIcon /> with React.createElement(ServerIcon) to avoid JSX parsing errors in a .ts file.
-    { name: "Cypher-State Digital", totalStake: 8_900_000, apr: 6.1, icon: React.createElement(ServerIcon) },
-    // FIX: Replaced <ServerIcon /> with React.createElement(ServerIcon) to avoid JSX parsing errors in a .ts file.
-    { name: "Nova Syndicate", totalStake: 15_100_000, apr: 5.2, icon: React.createElement(ServerIcon) },
-    // FIX: Replaced <ServerIcon /> with React.createElement(ServerIcon) to avoid JSX parsing errors in a .ts file.
-    { name: "Pioneer Staking", totalStake: 7_500_000, apr: 6.5, icon: React.createElement(ServerIcon) },
-    // FIX: Replaced <ServerIcon /> with React.createElement(ServerIcon) to avoid JSX parsing errors in a .ts file.
-    { name: "Aether Stake Pool", totalStake: 11_300_000, apr: 5.7, icon: React.createElement(ServerIcon) },
-];
-
-let validators: Validator[] = MOCK_VALIDATORS_DATA.map(v => ({...v, ...generateKeyPair()}));
-
-const GENESIS_BLOCK: Block = {
-    index: 0,
-    timestamp: 1672531200000,
-    transactions: [],
-    validator: '0'.repeat(64),
-    previousHash: '0'.repeat(64),
-    merkleRoot: '0'.repeat(64),
-    hash: '0'.repeat(64),
-    validatorSignature: '0'.repeat(128),
-};
-GENESIS_BLOCK.merkleRoot = calculateMerkleRoot(GENESIS_BLOCK.transactions);
-GENESIS_BLOCK.hash = getBlockHash(GENESIS_BLOCK);
-
-let blocks: Block[] = [GENESIS_BLOCK];
-let mempool: Transaction[] = [];
-let stats: NetworkStatsData = {
-    blockHeight: 0,
-    tps: 0,
-    activeNodes: validators.length,
-    marketCap: 420_123_456_789,
-};
-
-// publicKey -> { balance, stakes }
-let accounts = new Map<string, { balance: number; stakes: Stake[] }>();
-
-// --- SIMULATION LOGIC ---
-
-function runBlockCreation() {
-    setInterval(() => {
-        if (mempool.length === 0) return;
-        
-        const validMempool = mempool.filter(tx => verify(tx.hash, tx.signature, tx.from));
-        const transactionsForBlock = validMempool.slice(0, 20);
-        if (transactionsForBlock.length === 0) {
-            mempool = mempool.slice(validMempool.length); // Clear out invalid txs
-            return;
-        };
-
-        const validator = validators[Math.floor(Math.random() * validators.length)];
-        const previousBlock = blocks[0];
-        
-        const newBlockData: Omit<Block, 'hash' | 'validatorSignature'> = {
-            index: previousBlock.index + 1,
-            timestamp: Date.now(),
-            transactions: transactionsForBlock,
-            validator: validator.publicKey,
-            previousHash: previousBlock.hash,
-            merkleRoot: calculateMerkleRoot(transactionsForBlock),
-        };
-
-        const blockHash = getBlockHash(newBlockData);
-        const validatorSignature = sign(blockHash, validator.secretKey);
-
-        const finalBlock: Block = { ...newBlockData, hash: blockHash, validatorSignature: validatorSignature };
-
-        blocks = [finalBlock, ...blocks.slice(0, 99)]; // Keep last 100 blocks
-        mempool = mempool.slice(transactionsForBlock.length);
-        
-        // Process transactions to update account balances
-        for (const tx of transactionsForBlock) {
-            const fromAccount = accounts.get(tx.from) || { balance: 0, stakes: [] };
-            const toAccount = accounts.get(tx.to) || { balance: 0, stakes: [] };
-
-            if(tx.type === 'TRANSFER') {
-                fromAccount.balance -= tx.amount;
-                toAccount.balance += tx.amount;
-            } else if (tx.type === 'STAKE') {
-                fromAccount.balance -= tx.amount;
-                const existingStake = fromAccount.stakes.find(s => s.validatorAddress === tx.to);
-                if(existingStake) {
-                    existingStake.amount += tx.amount;
-                } else {
-                    fromAccount.stakes.push({ validatorAddress: tx.to, amount: tx.amount, rewards: 0 });
-                }
-                 const stakedValidator = validators.find(v => v.publicKey === tx.to);
-                 if(stakedValidator) {
-                    stakedValidator.totalStake += tx.amount;
-                 }
-            }
-            accounts.set(tx.from, fromAccount);
-            accounts.set(tx.to, toAccount);
-        }
-
-        stats = {
-            ...stats,
-            blockHeight: finalBlock.index,
-            tps: transactionsForBlock.length / 3,
-            marketCap: stats.marketCap + (Math.random() - 0.45) * 1000000,
-        };
-
-    }, 3000);
+/** Derive a backend-compatible address from a secp256k1 public key.
+ *  Backend formula (wallet.ts): '0x' + sha256(Buffer.from(publicKey, 'hex')).slice(0, 40)
+ */
+function deriveAddress(publicKeyHex: string): string {
+    return '0x' + sha256(Buffer.from(publicKeyHex, 'hex')).slice(0, 40);
 }
 
-function runStakingRewards() {
-    setInterval(() => {
-        for (const [publicKey, account] of accounts.entries()) {
-            if (account.stakes.length > 0) {
-                const newStakes = account.stakes.map(stake => {
-                    const validator = validators.find(v => v.publicKey === stake.validatorAddress);
-                    if (!validator) return stake;
-                    const rewardPerSecond = (stake.amount * (validator.apr / 100)) / (365 * 24 * 60 * 60);
-                    return { ...stake, rewards: stake.rewards + rewardPerSecond * 5 }; // 5s interval
-                });
-                accounts.set(publicKey, { ...account, stakes: newStakes });
+export class NodeService {
+
+    // =============================================================================
+    // PUBLIC API - Methods exposed to the frontend
+    // =============================================================================
+
+    public async getNetworkState(): Promise<NetworkState> {
+        try {
+            const [statusRes, chainRes, mempoolRes] = await Promise.all([
+                fetch(`${API_URL}/status`),
+                fetch(`${API_URL}/chain`),
+                fetch(`${API_URL}/mempool`)
+            ]);
+
+            if (!statusRes.ok || !chainRes.ok || !mempoolRes.ok) {
+                throw new Error(`Network fetch failed: status=${statusRes.status} chain=${chainRes.status} mempool=${mempoolRes.status}`);
             }
+
+            const status = await statusRes.json();
+            const chain = await chainRes.json();
+            const pool = await mempoolRes.json();
+
+            // The backend returns { version: "2.0", chain: [...] }
+            const blocks: Block[] = [...chain.chain].reverse();
+
+            // Backend doesn't expose validator detailed list easily yet, so we mock or fetch if available.
+            // For now, we'll return an empty list or minimal info.
+            const validators: any[] = [];
+
+            return {
+                stats: {
+                    blockHeight: status.height,
+                    tps: 0, // TODO: Calculate from recent blocks
+                    activeNodes: status.peers + 1, // Peers + Self
+                    marketCap: 0, // Placeholder
+                },
+                mempool: pool.pool || [],
+                blocks: blocks,
+                validators: validators,
+            };
+        } catch (err) {
+            console.error("Failed to fetch network state", err);
+            throw err;
         }
-    }, 5000);
-}
-
-runBlockCreation();
-runStakingRewards();
-
-
-// --- MOCK API ENDPOINTS ---
-
-const apiDelay = <T,>(data: T, delay = 200): Promise<T> => 
-    new Promise(resolve => setTimeout(() => resolve(JSON.parse(JSON.stringify(data))), delay));
-
-export const nodeService = {
-    getNetworkState: (): Promise<NetworkState> => {
-        const publicValidators = validators.map(({ secretKey, ...rest }) => rest);
-        return apiDelay({
-            stats,
-            blocks,
-            mempool,
-            validators: publicValidators,
-        });
-    },
-
-    submitTransaction: (tx: Transaction): Promise<{ success: boolean; message: string }> => {
-        // Basic validation
-        if (!tx.from || !tx.to || !tx.amount || !tx.signature || !tx.hash) {
-            return Promise.resolve({ success: false, message: 'Invalid transaction data.' });
-        }
-        if (mempool.find(t => t.hash === tx.hash)) {
-            return Promise.resolve({ success: false, message: 'Duplicate transaction.' });
-        }
-        // Verify signature
-        if (!verify(tx.hash, tx.signature, tx.from)) {
-            return Promise.resolve({ success: false, message: 'Invalid signature.' });
-        }
-        
-        const fromAccount = accounts.get(tx.from);
-        const pendingSentAmount = mempool
-            .filter(t => t.from === tx.from && (t.type === 'TRANSFER' || t.type === 'STAKE'))
-            .reduce((acc, t) => acc + t.amount, 0);
-
-        if (!fromAccount || (fromAccount.balance - pendingSentAmount) < tx.amount) {
-            return Promise.resolve({ success: false, message: 'Insufficient balance.' });
-        }
-
-        mempool.unshift(tx);
-        return apiDelay({ success: true, message: 'Transaction submitted to mempool.' });
-    },
-    
-    createWallet: (): Promise<{ publicKey: string; secretKey: string; balance: number; stakes: Stake[] }> => {
-        const { publicKey, secretKey } = generateKeyPair();
-        const initialBalance = 1000;
-        accounts.set(publicKey, { balance: initialBalance, stakes: [] });
-        return apiDelay({ publicKey, secretKey, balance: initialBalance, stakes: [] });
-    },
-
-    getWalletState: (publicKey: string): Promise<{ balance: number; stakes: Stake[] } | null> => {
-        const account = accounts.get(publicKey);
-        if(!account) {
-            return apiDelay(null);
-        }
-        return apiDelay(account);
-    },
-
-    claimRewards: (publicKey: string): Promise<{success: boolean, message: string}> => {
-        const account = accounts.get(publicKey);
-        if(!account || account.stakes.length === 0) {
-            return apiDelay({success: false, message: "No rewards to claim."});
-        }
-        
-        const totalRewards = account.stakes.reduce((acc, s) => acc + s.rewards, 0);
-        if(totalRewards < 0.0001) {
-            return apiDelay({success: false, message: "No rewards to claim."});
-        }
-
-        const newStakes = account.stakes.map(s => ({ ...s, rewards: 0 }));
-        const newBalance = account.balance + totalRewards;
-        
-        accounts.set(publicKey, {balance: newBalance, stakes: newStakes});
-        
-        return apiDelay({success: true, message: `Successfully claimed ${totalRewards.toFixed(6)} AN.`});
     }
-};
+
+    public async getWalletState(publicKey: string): Promise<WalletState | null> {
+        try {
+            // Check if key is address-like or pubkey. 
+            // In App.tsx, wallet.publicKey is used.
+            // We assume backend /balance/:address works with what is passed or we assume the frontend wallet generation produces valid addresses.
+            // But wait, createWallet below creates keys.
+            // If backend expects '0x'+40 chars, and we pass raw pubkey (often longer), it fails.
+            // I need to ensure createWallet produces compatible addresses OR we derive here.
+
+            // Backend `createWallet` produces address.
+            // See createWallet below.
+
+            let address = publicKey;
+            // If publicKey is NOT an address (does not start with 0x), we should assume it MIGHT be one if we generated it that way.
+
+            const res = await fetch(`${API_URL}/balance/${address}`);
+            if (!res.ok) return null;
+            const data = await res.json();
+
+            return {
+                balance: data.balance,
+                stakes: []
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Client-side wallet creation (keys stay in browser!)
+    public createWallet(): Wallet {
+        const keyPair = ec.genKeyPair();
+        const publicKey = keyPair.getPublic('hex');
+        const secretKey = keyPair.getPrivate('hex');
+
+        // Derive address matching backend formula:
+        // 0x + sha256(Buffer.from(publicKey, 'hex')).slice(0, 40)
+        const address = deriveAddress(publicKey);
+
+        return {
+            publicKey: address, // use address as the public-facing identifier
+            secretKey,
+            balance: 0,
+            stakes: [],
+        };
+    }
+
+    public async submitTransaction(tx: Transaction): Promise<{ success: boolean; message: string }> {
+        try {
+            const res = await fetch(`${API_URL}/transaction`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(tx)
+            });
+            const data = await res.json();
+            return { success: res.ok, message: data.message || data.error };
+        } catch (err: any) {
+            return { success: false, message: err.message };
+        }
+    }
+
+    public async claimRewards(publicKey: string): Promise<{ success: boolean; message: string }> {
+        return { success: false, message: "Claim rewards not implemented on mainnet yet." };
+    }
+
+
+    // =============================================================================
+    // MOCK METHODS 
+    // =============================================================================
+
+    public _getMempool() { return []; }
+    public _getBlocks() { return []; }
+    public _getWallets() { return new Map(); }
+    public _getValidators() { return []; }
+    public _stopBlockProduction() { }
+}
+
+export const nodeService = new NodeService();

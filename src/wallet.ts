@@ -1,12 +1,20 @@
-// src/wallet.ts (Final Corrected Version)
+
+import elliptic from 'elliptic';
+const { ec: EC } = elliptic;
 import crypto from 'crypto';
-import CryptoJS from 'crypto-js';
+import path from 'path';
+import fs from 'fs';
+import { getLogger } from './logger.js';
+
+const log = getLogger();
+const ec = new EC('secp256k1');
+const WALLETS_DIR = path.resolve(process.cwd(), 'wallets');
 
 // --- Wallet Data Structures ---
 
 export interface Wallet {
-  publicKey: string; // PEM-encoded string
-  privateKey: string; // PEM-encoded string
+  publicKey: string; // Hex string
+  privateKey: string; // Hex string
   address: string;
   isEncrypted: boolean;
 }
@@ -15,72 +23,95 @@ export interface Wallet {
 
 /**
  * Generates a new secp256k1 key pair and derives a blockchain address.
- * Keys are generated in PEM format.
+ * Keys are generated in Hex format.
  * @returns A new Wallet object with public/private keys and address.
  */
 export function createWallet(): Wallet {
-  const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', {
-    namedCurve: 'secp256k1',
-    publicKeyEncoding: {
-      type: 'spki',
-      format: 'pem'
-    },
-    privateKeyEncoding: {
-      type: 'pkcs8',
-      format: 'pem'
-    }
-  });
+  const keyPair = ec.genKeyPair();
+  const publicKey = keyPair.getPublic('hex');
+  const privateKey = keyPair.getPrivate('hex');
+  const address = generateAddress(publicKey);
 
-  const publicKeyPem = publicKey.toString();
-  const privateKeyPem = privateKey.toString();
-  const address = generateAddress(publicKeyPem);
+  return { privateKey, publicKey, address, isEncrypted: false };
+}
 
-  return { privateKey: privateKeyPem, publicKey: publicKeyPem, address, isEncrypted: false };
+/**
+ * Derives the public key from a private key.
+ * @param privateKeyHex The private key in Hex format.
+ * @returns The public key in Hex format.
+ */
+export function getPublicKeyFromPrivate(privateKeyHex: string): string {
+  const key = ec.keyFromPrivate(privateKeyHex, 'hex');
+  return key.getPublic('hex');
 }
 
 /**
  * Generates a blockchain address from a public key.
  * The address is the first 40 characters of the SHA-256 hash of the public key, prefixed with '0x'.
- * @param publicKeyPem The public key PEM string.
+ * @param publicKeyHex The public key Hex string.
  * @returns The blockchain address.
  */
-export function generateAddress(publicKeyPem: string): string {
-  const publicKey = crypto.createPublicKey(publicKeyPem);
-  const der = publicKey.export({ type: "spki", format: "der" }) as Buffer;
-  return `0x${crypto.createHash("sha256").update(der).digest("hex").slice(0, 40)}`;
+export function generateAddress(publicKeyHex: string): string {
+  // Simple Sha256 of the Hex string (consistent with frontend simple approach)
+  // Ensure we hash the BUFFER of the hex string if that's what we want, or the string itself?
+  // Frontend nodeService mock used: const hash = sha256(Buffer.from(publicKey, 'hex')); (In my mental model)
+  // Let's check frontend cryptoUtils: it uses `sha256(txString)`. 
+  // Standard AetheriumNova likely just hashes the string or bytes.
+  // I will hash the hex string as distinct bytes.
+  // Buffer.from(hex, 'hex')
+
+  const buffer = Buffer.from(publicKeyHex, 'hex');
+  const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+  return `0x${hash.slice(0, 40)}`;
 }
 
 /**
  * Signs a payload with a private key.
- * The private key must be in PEM format.
- * @param privateKeyPem The private key in PEM format.
- * @param payload The data to be signed.
- * @returns The signature string.
+ * @param privateKeyHex The private key in Hex format.
+ * @param payload The data to be signed (string).
+ * @returns The signature string (DER Hex).
  */
-export function signTransaction(privateKeyPem: string, payload: string): string {
-  const sign = crypto.createSign("SHA256");
-  sign.update(payload);
-  const privateKey = crypto.createPrivateKey(privateKeyPem);
-  return sign.sign(privateKey).toString("hex");
+export function signTransaction(privateKeyHex: string, payload: string): string {
+  // Payload should be hashed first? 
+  // 'elliptic' sign takes a message (hash) or array.
+  // Usually we sign the HASH of the payload.
+  // Transaction.ts getTransactionId returns a HASH.
+  // Transaction.ts VALIDATION calls verifySignature(pk, payload, sig).
+  // Frontend `sign` in cryptoUtils: 
+  // export const sign = (hash: string, secretKey: string): string => {
+  //   const key = ec.keyFromPrivate(secretKey, 'hex');
+  //   const signature = key.sign(hash, 'base64'); // WAIT? Base64?
+  //   return signature.toDER('hex');
+  // };
+  // Frontend sign takes HASH. 
+  // Backend `Transaction.ts` calls verifySignature with `payloadForVerification` which is the RAW STRING?
+  // Let's re-read Transaction.ts verifySignature usage.
+
+  // Transaction.ts Line 110: const payloadForVerification = getTransactionPayload(tx);
+  // Line 112: verifySignature(tx.publicKey, payloadForVerification, tx.signature)
+  // Logic: verifySignature must HASH the payload before verifying if strict.
+  // Frontend cryptoUtils `sign` expects `hash`.
+  // So backend `signTransaction` and `verifySignature` should HASH the payload first to match frontend which signs the hash.
+
+  const payloadHash = crypto.createHash('sha256').update(payload).digest('hex');
+  const key = ec.keyFromPrivate(privateKeyHex, 'hex');
+  const signature = key.sign(payloadHash, 'hex'); // 'hex' encoding for input hash? elliptic doc says array or hex if encoding set?
+  // Elliptic .sign(msg, enc, options).
+  return signature.toDER('hex');
 }
 
 /**
  * Verifies a signature against a payload and public key.
- * The public key must be in PEM format.
- * @param publicKeyPem The public key in PEM format.
- * @param payload The original data.
- * @param signatureHex The signature to verify.
+ * @param publicKeyHex The public key in Hex format.
+ * @param payload The original data (raw string).
+ * @param signatureHex The signature to verify (DER Hex).
  * @returns True if the signature is valid, otherwise false.
  */
-export function verifySignature(publicKeyPem: string, payload: string, signatureHex: string): boolean {
+export function verifySignature(publicKeyHex: string, payload: string, signatureHex: string): boolean {
   try {
-    const verify = crypto.createVerify("SHA256");
-    verify.update(payload);
-    verify.end();
-
-    const publicKey = crypto.createPublicKey(publicKeyPem);
-    const signature = Buffer.from(signatureHex, "hex");
-    return verify.verify(publicKey, signature);
+    const payloadHash = crypto.createHash('sha256').update(payload).digest('hex');
+    const key = ec.keyFromPublic(publicKeyHex, 'hex');
+    return key.verify(payloadHash, signatureHex);
   } catch (e) {
     console.error("Signature verification failed:", e);
     return false;
@@ -88,37 +119,41 @@ export function verifySignature(publicKeyPem: string, payload: string, signature
 }
 
 /**
- * Encrypts a private key using AES with a passphrase.
- * @param privateKey The private key to encrypt.
- * @param passphrase The passphrase for encryption.
- * @returns The encrypted private key.
+ * Encrypts a private key using AES-256-GCM.
+ * @param privateKeyHex The private key.
+ * @param passphrase The passphrase.
+ * @returns The encrypted string.
  */
-export function encryptPrivateKey(privateKey: string, passphrase: string): string {
-  if (!passphrase || passphrase.length < 8) {
-    throw new Error("Passphrase must be at least 8 characters long for encryption.");
-  }
-  return CryptoJS.AES.encrypt(privateKey, passphrase).toString();
+export function encryptPrivateKey(privateKeyHex: string, passphrase: string): string {
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const key = crypto.pbkdf2Sync(passphrase, salt, 100000, 32, 'sha512');
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(privateKeyHex, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  return `${iv.toString('hex')}:${salt.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
 }
 
 /**
- * Decrypts an encrypted private key using a passphrase.
- * @param encryptedPrivateKey The encrypted private key.
- * @param passphrase The passphrase for decryption.
+ * Decrypts a private key.
+ * @param encryptedData The encrypted string.
+ * @param passphrase The passphrase.
  * @returns The decrypted private key.
- * @throws An error if the decryption fails (e.g., incorrect passphrase).
  */
-export function decryptPrivateKey(encryptedPrivateKey: string, passphrase: string): string {
-  if (!passphrase) {
-    throw new Error("Passphrase is required to decrypt the private key.");
+export function decryptPrivateKey(encryptedData: string, passphrase: string): string {
+  const [ivHex, saltHex, authTagHex, encryptedHex] = encryptedData.split(':');
+  if (!ivHex || !saltHex || !authTagHex || !encryptedHex) {
+    throw new Error('Invalid encrypted data format.');
   }
-  try {
-    const bytes = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase);
-    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-    if (!decrypted.includes('PRIVATE KEY')) {
-        throw new Error("Decryption failed or incorrect passphrase.");
-    }
-    return decrypted;
-  } catch (e) {
-    throw new Error("Decryption failed or incorrect passphrase.");
-  }
+  const iv = Buffer.from(ivHex, 'hex');
+  const salt = Buffer.from(saltHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+  const encrypted = Buffer.from(encryptedHex, 'hex');
+  const key = crypto.pbkdf2Sync(passphrase, salt, 100000, 32, 'sha512');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+
+  return decrypted.toString('utf8');
 }

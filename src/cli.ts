@@ -1,3 +1,4 @@
+import 'dotenv/config';
 // src/cli.ts
 import { Command } from "commander";
 import { registerWalletCommands } from "./commands/wallet.js";
@@ -16,5 +17,4 @@ registerTransactionCommands(program);
 registerStakingCommands(program);
 registerQueryCommands(program);
 registerMineCommand(program);
-
 program.parseAsync(process.argv);

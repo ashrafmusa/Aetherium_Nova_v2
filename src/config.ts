@@ -1,49 +1,126 @@
 import fs from 'fs';
 import path from 'path';
 
-const genesisConfigPath = path.resolve(process.cwd(), 'genesis.config.json');
-const networkConfigPath = path.resolve(process.cwd(), 'network.config.json');
+export interface GasCosts {
+    BASE_EXECUTION: number;
+    STORAGE_READ: number;
+    STORAGE_WRITE: number;
+    LOG: number;
+    BYTECODE_BYTE: number;
+    CALL_OVERHEAD: number;
+    CREATE_ACCOUNT: number;
+    INTER_CONTRACT_CALL: number;
+    TRANSFER_BY_CONTRACT: number;
+}
 
-export const GENESIS_CONFIG = JSON.parse(fs.readFileSync(genesisConfigPath, 'utf-8'));
+export interface GenesisConfig {
+    vmMemoryLimitMB: number;
+    vmExecutionTimeoutMs: number;
+    gasPriceUnit: number;
+    minFee: number;
+    baseReward: number;
+    maxTransactionsPerBlock: number;
+    transactionPruneInterval: number;
+    transactionTTL: number;
+    bootstrapAddress: string;
+    bootstrapFunds: number;
+    bootstrapStake: number;
+    minStake: number;
+    delegatorSharePercentage: number;
+    gasCosts: GasCosts;
+    unjailPeriodMs: number;
+    maxSlashCount: number;
+    epochLength: number;
+    unstakePeriodMs: number;
+    slashPercentage: number;
+    totalSupply: number;
+    genesisBlockTimestamp: number;
+    maxMempoolSize: number;
+}
 
-GENESIS_CONFIG.vmMemoryLimitMB = GENESIS_CONFIG.vmMemoryLimitMB ?? 128;
-GENESIS_CONFIG.vmExecutionTimeoutMs = GENESIS_CONFIG.vmExecutionTimeoutMs ?? 500;
-GENESIS_CONFIG.gasPriceUnit = GENESIS_CONFIG.gasPriceUnit ?? 100;
-GENESIS_CONFIG.minFee = GENESIS_CONFIG.minFee ?? 0.001;
-GENESIS_CONFIG.baseReward = GENESIS_CONFIG.baseReward ?? 50;
-GENESIS_CONFIG.maxTransactionsPerBlock = GENESIS_CONFIG.maxTransactionsPerBlock ?? 100;
-GENESIS_CONFIG.transactionPruneInterval = GENESIS_CONFIG.transactionPruneInterval ?? 60000;
-GENESIS_CONFIG.transactionTTL = GENESIS_CONFIG.transactionTTL ?? 300000;
-GENESIS_CONFIG.bootstrapAddress = GENESIS_CONFIG.bootstrapAddress ?? "0xe5bca44e2313297f074536a776e8732b275505b5";
-GENESIS_CONFIG.bootstrapFunds = GENESIS_CONFIG.bootstrapFunds ?? 1000000000000000;
-GENESIS_CONFIG.bootstrapStake = GENESIS_CONFIG.bootstrapStake ?? 5000000;
-GENESIS_CONFIG.minStake = GENESIS_CONFIG.minStake ?? 1000;
-GENESIS_CONFIG.delegatorSharePercentage = GENESIS_CONFIG.delegatorSharePercentage ?? 0.2;
+export interface NetworkConfig {
+    defaultPort: number;
+    seedPeers: string[];
+    pruneMempoolInterval: number;
+    [key: string]: unknown;
+}
 
-GENESIS_CONFIG.gasCosts = {
-    BASE_EXECUTION: GENESIS_CONFIG.gasCosts?.BASE_EXECUTION ?? 100,
-    STORAGE_READ: GENESIS_CONFIG.gasCosts?.STORAGE_READ ?? 10,
-    STORAGE_WRITE: GENESIS_CONFIG.gasCosts?.STORAGE_WRITE ?? 100,
-    LOG: GENESIS_CONFIG.gasCosts?.LOG ?? 5,
-    BYTECODE_BYTE: GENESIS_CONFIG.gasCosts?.BYTECODE_BYTE ?? 0.05,
-    CALL_OVERHEAD: GENESIS_CONFIG.gasCosts?.CALL_OVERHEAD ?? 50,
-    CREATE_ACCOUNT: GENESIS_CONFIG.gasCosts?.CREATE_ACCOUNT ?? 2000,
-    INTER_CONTRACT_CALL: GENESIS_CONFIG.gasCosts?.INTER_CONTRACT_CALL ?? 500,
-    TRANSFER_BY_CONTRACT: GENESIS_CONFIG.gasCosts?.TRANSFER_BY_CONTRACT ?? 200
-};
+let genesisConfig: GenesisConfig | null = null;
+let networkConfig: NetworkConfig | null = null;
 
-GENESIS_CONFIG.unjailPeriodMs = GENESIS_CONFIG.unjailPeriodMs ?? 86400000;
-GENESIS_CONFIG.maxSlashCount = GENESIS_CONFIG.maxSlashCount ?? 3;
-GENESIS_CONFIG.epochLength = GENESIS_CONFIG.epochLength ?? 100;
-GENESIS_CONFIG.unstakePeriodMs = GENESIS_CONFIG.unstakePeriodMs ?? 604800000;
-GENESIS_CONFIG.slashPercentage = GENESIS_CONFIG.slashPercentage ?? 0.05; // ADDED: Configurable slash percentage
+function loadGenesisConfig(): GenesisConfig {
+    if (genesisConfig) return genesisConfig;
 
-const baseNetworkConfig = JSON.parse(fs.readFileSync(networkConfigPath, 'utf-8'));
+    const genesisConfigPath = path.resolve(process.cwd(), 'genesis.config.json');
+    let rawConfig: Partial<GenesisConfig>;
+    try {
+        rawConfig = JSON.parse(fs.readFileSync(genesisConfigPath, 'utf-8'));
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[Config] FATAL: Failed to load genesis.config.json: ${msg}`);
+        process.exit(1);
+    }
 
-const seedPeers = process.env.PEERS ? process.env.PEERS.split(',') : baseNetworkConfig.seedPeers;
+    const config: GenesisConfig = {
+        vmMemoryLimitMB: rawConfig.vmMemoryLimitMB ?? 128,
+        vmExecutionTimeoutMs: rawConfig.vmExecutionTimeoutMs ?? 500,
+        gasPriceUnit: rawConfig.gasPriceUnit ?? 100,
+        minFee: rawConfig.minFee ?? 0.001,
+        baseReward: rawConfig.baseReward ?? 50,
+        maxTransactionsPerBlock: rawConfig.maxTransactionsPerBlock ?? 100,
+        transactionPruneInterval: rawConfig.transactionPruneInterval ?? 60000,
+        transactionTTL: rawConfig.transactionTTL ?? 300000,
+        bootstrapAddress: rawConfig.bootstrapAddress ?? "0xe5bca44e2313297f074536a776e8732b275505b5",
+        bootstrapFunds: rawConfig.bootstrapFunds ?? 1000000000000000,
+        bootstrapStake: rawConfig.bootstrapStake ?? 5000000,
+        minStake: rawConfig.minStake ?? 1000,
+        delegatorSharePercentage: rawConfig.delegatorSharePercentage ?? 0.2,
+        gasCosts: {
+            BASE_EXECUTION: rawConfig.gasCosts?.BASE_EXECUTION ?? 100,
+            STORAGE_READ: rawConfig.gasCosts?.STORAGE_READ ?? 10,
+            STORAGE_WRITE: rawConfig.gasCosts?.STORAGE_WRITE ?? 100,
+            LOG: rawConfig.gasCosts?.LOG ?? 5,
+            BYTECODE_BYTE: rawConfig.gasCosts?.BYTECODE_BYTE ?? 0.05,
+            CALL_OVERHEAD: rawConfig.gasCosts?.CALL_OVERHEAD ?? 50,
+            CREATE_ACCOUNT: rawConfig.gasCosts?.CREATE_ACCOUNT ?? 2000,
+            INTER_CONTRACT_CALL: rawConfig.gasCosts?.INTER_CONTRACT_CALL ?? 500,
+            TRANSFER_BY_CONTRACT: rawConfig.gasCosts?.TRANSFER_BY_CONTRACT ?? 200
+        },
+        unjailPeriodMs: rawConfig.unjailPeriodMs ?? 86400000,
+        maxSlashCount: rawConfig.maxSlashCount ?? 3,
+        epochLength: rawConfig.epochLength ?? 100,
+        unstakePeriodMs: rawConfig.unstakePeriodMs ?? 604800000,
+        slashPercentage: rawConfig.slashPercentage ?? 0.05,
+        totalSupply: rawConfig.totalSupply ?? 1000000000,
+        genesisBlockTimestamp: rawConfig.genesisBlockTimestamp ?? 1700000000000,
+        maxMempoolSize: rawConfig.maxMempoolSize ?? 5000,
+    };
 
-export const NETWORK_CONFIG = {
-    ...baseNetworkConfig,
-    seedPeers,
-    pruneMempoolInterval: baseNetworkConfig.pruneMempoolInterval ?? 60000
-};
+    genesisConfig = config;
+    return genesisConfig;
+}
+
+function loadNetworkConfig(): NetworkConfig {
+    if (networkConfig) return networkConfig;
+
+    const networkConfigPath = path.resolve(process.cwd(), 'network.config.json');
+    let baseNetworkConfig: Partial<NetworkConfig>;
+    try {
+        baseNetworkConfig = JSON.parse(fs.readFileSync(networkConfigPath, 'utf-8'));
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[Config] FATAL: Failed to load network.config.json: ${msg}`);
+        process.exit(1);
+    }
+    const seedPeers = process.env.PEERS ? process.env.PEERS.split(',') : (baseNetworkConfig.seedPeers ?? []);
+
+    networkConfig = {
+        ...baseNetworkConfig,
+        seedPeers,
+        pruneMempoolInterval: baseNetworkConfig.pruneMempoolInterval ?? 60000
+    } as NetworkConfig;
+    return networkConfig;
+}
+
+export const GENESIS_CONFIG = loadGenesisConfig();
+export const NETWORK_CONFIG = loadNetworkConfig();

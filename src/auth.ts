@@ -1,11 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
-import logger from './logger.js';
+import crypto from 'crypto';
+import { getLogger } from './logger.js';
 
-const API_KEY = process.env.API_KEY;
+const logger = getLogger();
 
-if (!API_KEY) {
-    logger.error('[Auth] CRITICAL: API_KEY environment variable is not set. API authentication will fail.');
+if (!process.env.API_KEY) {
+    logger.error('[Auth] FATAL: API_KEY environment variable is not set. Refusing to start.');
+    process.exit(1);
 }
+
+const API_KEY_BUF = Buffer.from(process.env.API_KEY as string);
 
 export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
     const providedKey = req.headers['x-api-key'];
@@ -15,7 +19,13 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
         return res.status(401).json({ error: 'API key is required.' });
     }
 
-    if (String(providedKey) !== API_KEY) {
+    const providedBuf = Buffer.from(String(providedKey));
+
+    // Constant-time comparison prevents timing side-channel attacks
+    if (
+        providedBuf.length !== API_KEY_BUF.length ||
+        !crypto.timingSafeEqual(providedBuf, API_KEY_BUF)
+    ) {
         logger.warn('[Auth] Access denied. Invalid API key provided.');
         return res.status(403).json({ error: 'Invalid API key.' });
     }

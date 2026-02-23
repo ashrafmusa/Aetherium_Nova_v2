@@ -1,32 +1,41 @@
-// src/node.ts (Updated with Debugging)
+// src/node.ts
 import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import rateLimit from 'express-rate-limit';
 import * as client from 'prom-client';
 import cors from 'cors';
+import helmet from 'helmet';
 import { z, ZodError, ZodIssue } from 'zod';
 import { type Transaction, getTransactionId, TxType } from './Transaction.js';
-import { getBlockchain, proposeBlock, calculateBlockHash, replaceChain, type Block, getLatestBlock } from './chain.js';
-import { getBalance, getNonceForAddress, getContractCode, getContractStorage, saveLedgerToDisk } from './ledger.js';
-import mempool from './pool.js';
-import { broadcastBlock, broadcastTransaction, getPeers, connectToPeer, syncWithPeers, gossipPeers } from './network.js';
+import { getBlockchain, getChainLength, proposeBlock, calculateBlockHash, replaceChain, type Block, getLatestBlock } from './chain.js';
+import { getBalance, getNonceForAddress, getContractCode, getContractStorage, saveLedgerToDisk, loadLedgerFromDisk } from './ledger.js';
+import { Mempool } from './pool.js';
+import { p2p } from './services/p2p.js';
 import { NETWORK_CONFIG, GENESIS_CONFIG } from './config.js';
-import logger from './logger.js';
-import { createWallet, signTransaction, verifySignature, decryptPrivateKey, encryptPrivateKey } from './wallet.js';
-import { chooseNextBlockProposer, unjailValidator, getValidator, type Validator } from './staking.js';
+import { getLogger } from './logger.js';
+import { createWallet, signTransaction, verifySignature } from './wallet.js';
+import { chooseNextBlockProposer, unjailValidator, getValidator, type Validator, loadStakingLedgerFromDisk } from './staking.js';
 import { apiKeyAuth } from './auth.js';
 import { executeContract } from './vm.js';
-import fs from 'fs';
-import path from 'path';
 
-// Catch and log any uncaught exceptions before the process exits
+const logger = getLogger();
+
+// Catch and log uncaught exceptions — then exit (Node is in undefined state after this)
 process.on('uncaughtException', (err) => {
   logger.error(`[Node] Uncaught Exception: ${err.message}`, { stack: err.stack });
+  process.exit(1);
+});
+
+// Catch unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error(`[Node] Unhandled Rejection at: ${promise}, reason: ${reason}`);
+  process.exit(1);
 });
 
 const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+app.use(helmet());                                              // Security headers (X-Content-Type-Options, CSP, HSTS, etc.)
+app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' })); // Restrict CORS
+app.use(bodyParser.json({ limit: '100kb' }));                  // Limit payload size
 app.use(apiKeyAuth);
 
 const limiter = rateLimit({
@@ -42,17 +51,35 @@ const PORT = process.env.PORT || NETWORK_CONFIG.defaultPort;
 
 client.collectDefaultMetrics();
 const transactionsProcessed = new client.Counter({ name: 'aetherium_nova_transactions_processed_total', help: 'Total transactions processed' });
-const blocksMined = new client.Counter({ name: 'aetherium_nova_blocks_mired_total', help: 'Total blocks mined' });
+const blocksMined = new client.Counter({ name: 'aetherium_nova_blocks_mined_total', help: 'Total blocks mined' });
 const mempoolGauge = new client.Gauge({ name: 'aetherium_nova_mempool_size', help: 'Current mempool size' });
+// Gossip handled by P2P service
+
+
+// Ledger loaded asynchronously below
+
+
+const mempool = new Mempool();
 setInterval(() => mempoolGauge.set(mempool.getPool().length), 5000);
-setInterval(() => gossipPeers(), NETWORK_CONFIG.gossipIntervalMs ?? 30000);
 
 (async () => {
   try {
-    await syncWithPeers();
+    await loadLedgerFromDisk();
+    await loadStakingLedgerFromDisk();
+
+    // Initialize P2P
+    const p2pPort = parseInt(process.env.P2P_PORT || "6001");
+    p2p.setMempool(mempool);
+    p2p.listen(p2pPort);
+
+    // Connect to seed peers
+    NETWORK_CONFIG.seedPeers.forEach((peer: string) => {
+      if (peer.trim().length > 0) p2p.connectToPeer(peer);
+    });
+
   } catch (err: any) {
     const error = err instanceof Error ? err.message : String(err);
-    logger.error(`[Node] Initial sync failed: ${error}`);
+    logger.error(`[Node] Initialization failed: ${error}`);
   }
 })();
 
@@ -62,7 +89,7 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-const rawTransactionSchema = z.object({
+const publicTransactionSchema = z.object({
   type: z.nativeEnum(TxType),
   from: z.string().startsWith('0x').length(42),
   to: z.string().startsWith('0x').length(42),
@@ -73,13 +100,28 @@ const rawTransactionSchema = z.object({
   data: z.any().optional(),
   signature: z.string().min(1),
   publicKey: z.string().min(1),
+  hash: z.string().length(64),
+});
+
+const blockTransactionSchema = z.object({
+  type: z.nativeEnum(TxType),
+  from: z.string(), // Allow 'coinbase'
+  to: z.string().startsWith('0x').length(42),
+  amount: z.number().nonnegative(),
+  fee: z.number().nonnegative(),
+  nonce: z.number().int(), // allow -1 for coinbase
+  timestamp: z.number().int().nonnegative(),
+  data: z.any().optional(),
+  signature: z.string(),
+  publicKey: z.string(),
+  hash: z.string().length(64),
 });
 
 const blockReceiveSchema = z.object({
   index: z.number().int().nonnegative(),
   previousHash: z.string().length(64),
   timestamp: z.number().int().nonnegative(),
-  data: z.array(rawTransactionSchema),
+  data: z.array(blockTransactionSchema),
   hash: z.string().length(64),
   proposer: z.string().startsWith('0x').length(42),
   proposerPublicKey: z.string(),
@@ -108,12 +150,12 @@ app.post('/create-wallet', (req: Request, res: Response) => {
 });
 
 app.get('/balance/:address', (req: Request, res: Response) => {
-    const { address = "" } = req.params;
-    if (!address || typeof address !== 'string' || !address.startsWith('0x') || address.length !== 42) {
-      return res.status(400).json({ error: "Invalid address format. Must be 42 characters and start with '0x'." });
-    }
-    const balance = getBalance(address);
-    res.json({ address, balance });
+  const { address = "" } = req.params;
+  if (!address || typeof address !== 'string' || !address.startsWith('0x') || address.length !== 42) {
+    return res.status(400).json({ error: "Invalid address format. Must be 42 characters and start with '0x'." });
+  }
+  const balance = getBalance(address);
+  res.json({ address, balance });
 });
 
 app.get('/metrics', async (req: Request, res: Response) => {
@@ -128,8 +170,8 @@ app.get('/metrics', async (req: Request, res: Response) => {
 
 app.get('/status', (req: Request, res: Response) => {
   res.json({
-    height: getBlockchain().length,
-    peers: getPeers().length,
+    height: getChainLength(),
+    peers: p2p.getPeers().length,
     mempool: mempool.getPool().length
   });
 });
@@ -169,13 +211,13 @@ app.get('/contract/:address', (req: Request, res: Response) => {
 
 app.post('/transaction', (req: Request, res: Response) => {
   try {
-    const tx: Transaction = rawTransactionSchema.parse(req.body);
+    const tx: Transaction = publicTransactionSchema.parse(req.body);
 
     const result = mempool.addToPool(tx);
     if (result.success) {
       transactionsProcessed.inc();
       mempoolGauge.set(mempool.getPool().length);
-      broadcastTransaction(tx);
+      p2p.broadcastTransaction(tx);
       if (tx.type === TxType.DEPLOY) {
         return res.status(202).json({ message: "Deploy transaction accepted", contractAddress: tx.to, txId: getTransactionId(tx) });
       }
@@ -215,8 +257,8 @@ app.post('/proposeBlock', async (req: Request, res: Response) => {
 
     const expectedProposer = chooseNextBlockProposer(lastBlock.hash);
     if (expectedProposer !== block.proposer) {
-        logger.warn(`[API] Block proposal rejected: ${block.proposer.slice(0, 10)}... is not the expected proposer. Expected: ${expectedProposer?.slice(0, 10)}...`);
-        return res.status(403).json({ error: "Not the current block proposer." });
+      logger.warn(`[API] Block proposal rejected: ${block.proposer.slice(0, 10)}... is not the expected proposer. Expected: ${expectedProposer?.slice(0, 10)}...`);
+      return res.status(403).json({ error: "Not the current block proposer." });
     }
 
     const newBlock = await proposeBlock(
@@ -224,13 +266,14 @@ app.post('/proposeBlock', async (req: Request, res: Response) => {
       block.proposer,
       block.proposerPublicKey,
       block.signature,
-      block.timestamp
+      block.timestamp,
+      mempool
     );
 
     if (newBlock) {
       blocksMined.inc();
       mempoolGauge.set(mempool.getPool().length);
-      broadcastBlock(newBlock);
+      p2p.broadcastBlock(newBlock);
       logger.info(`[API] Block ${newBlock.index} proposed successfully.`);
       res.json({ message: "Block proposed.", block: newBlock });
     } else {
@@ -250,15 +293,15 @@ app.post('/proposeBlock', async (req: Request, res: Response) => {
 });
 
 app.post('/addPeer', async (req: Request, res: Response) => {
-    try {
-      const { url } = addPeerSchema.parse(req.body);
-      await connectToPeer(url);
-      res.json({ message: `Peer ${url} added and sync initiated.` });
-    } catch (err: unknown) {
-      if (err instanceof ZodError) {
-        const zodError = err as ZodError;
-        logger.warn(`[API] /addPeer validation error: ${zodError.issues.map((e: ZodIssue) => e.message).join(', ')}`);
-        return res.status(400).json({ error: "Validation failed", details: zodError.issues });
+  try {
+    const { url } = addPeerSchema.parse(req.body);
+    p2p.connectToPeer(url);
+    res.json({ message: `Peer ${url} added.` });
+  } catch (err: unknown) {
+    if (err instanceof ZodError) {
+      const zodError = err as ZodError;
+      logger.warn(`[API] /addPeer validation error: ${zodError.issues.map((e: ZodIssue) => e.message).join(', ')}`);
+      return res.status(400).json({ error: "Validation failed", details: zodError.issues });
     }
     const error = err instanceof Error ? err.message : String(err);
     logger.error(`[API] /addPeer failed: ${error}`);
@@ -278,10 +321,10 @@ app.post('/block', async (req: Request, res: Response) => {
     const currentChain = getBlockchain();
     const newChainCandidate = [...currentChain, block];
 
-    const replaced = await replaceChain(newChainCandidate);
+    const replaced = await replaceChain(newChainCandidate, mempool);
 
     if (replaced) {
-      broadcastBlock(block, req.hostname);
+      p2p.broadcastBlock(block);
       res.status(200).json({ message: "Block accepted as new head." });
     } else {
       res.status(200).json({ message: "Block received but not accepted (not longer/more difficulty chain or invalid)." });
@@ -328,16 +371,18 @@ app.get('/contract/:address/call/:method', (req: Request, res: Response) => {
   }
 
   const currentContractStorage = getContractStorage(address);
+  const chainLen = getChainLength();
+  const latestBlock = getLatestBlock();
   const tempBlock: Block = {
-      index: getBlockchain().length,
-      previousHash: getBlockchain().length > 0 ? getBlockchain()[getBlockchain().length - 1].hash : "0".repeat(64),
-      timestamp: Date.now(),
-      data: [],
-      hash: "0".repeat(64),
-      proposer: "0x" + "0".repeat(40),
-      proposerPublicKey: "0".repeat(64),
-      signature: "0".repeat(128),
-      shardId: 0,
+    index: chainLen,
+    previousHash: chainLen > 0 ? latestBlock.hash : "0".repeat(64),
+    timestamp: Date.now(),
+    data: [],
+    hash: "0".repeat(64),
+    proposer: "0x" + "0".repeat(40),
+    proposerPublicKey: "0".repeat(64),
+    signature: "0".repeat(128),
+    shardId: 0,
   };
   const tempTransaction: Transaction = {
     type: TxType.CALL,
@@ -350,6 +395,7 @@ app.get('/contract/:address/call/:method', (req: Request, res: Response) => {
     data: { method, params },
     signature: "",
     publicKey: "",
+    hash: ''
   };
 
   try {
@@ -391,19 +437,24 @@ app.post('/unjail', async (req: Request, res: Response) => {
 });
 
 app.get('/peers', (req: Request, res: Response) => {
-  res.json({ peers: getPeers() });
+  res.json({ peers: p2p.getPeers() });
 });
 
 app.get('/blocks/:index', (req: Request, res: Response) => {
-    const index = parseInt(req.params.index, 10);
-    const chain = getBlockchain();
-    if(isNaN(index) || index < 0 || index >= chain.length) {
-      return res.status(400).json({ error: "Invalid block index." });
-    }
-    res.json(chain[index]);
+  const index = parseInt(req.params.index, 10);
+  if (isNaN(index) || index < 0 || index >= getChainLength()) {
+    return res.status(400).json({ error: "Invalid block index." });
+  }
+  res.json(getBlockchain()[index]);
 });
 
-app.listen(PORT, () => logger.info(`🚀 Node running at http://localhost:${PORT}`));
+// --- P2P ---
+// P2P Sync handled in initialization
+
+
+app.listen(PORT, () => {
+  logger.info(`🚀 Node running at http://localhost:${PORT}`);
+});
 
 // A small, harmless task to keep the event loop busy
-setInterval(() => {}, 10000);
+setInterval(() => { }, 10000);

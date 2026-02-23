@@ -1,7 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import logger from './logger.js';
+import { getLogger } from './logger.js';
 import { ContractEvent } from './SmartContract.js';
+
+
+
+const log = getLogger();
 
 const LEDGER_FILE = path.resolve("ledger.snapshot.json");
 
@@ -16,24 +20,24 @@ export function getBalance(address: string): number { return balances.get(addres
 export function getAllBalances(): Map<string, number> { return new Map(balances); }
 export function getNonceForAddress(address: string): number { return nonces.get(address) ?? 0; }
 export function getContractCode(address: string): string | undefined { return contractCode.get(address); }
-export function getContractStorage(address:string): Map<string, any> {
-    return new Map(contractStorage.get(address) ?? []);
+export function getContractStorage(address: string): Map<string, any> {
+  return new Map(contractStorage.get(address) ?? []);
 }
 export function getContractEvents(txId: string): ContractEvent[] { return contractEvents.get(txId) ?? []; }
 export function getUnbondingDelegations(): Array<{ id: string; delegatorAddress: string; validatorAddress: string; amount: number; releaseTime: number }> {
-    return Array.from(unbondingDelegations.values());
+  return Array.from(unbondingDelegations.values());
 }
 
 export function setBalance(address: string, amount: number): void { balances.set(address, amount); }
 export function setNonce(address: string, nonce: number): void { nonces.set(address, nonce); }
 export function setContractCode(address: string, code: string): void { contractCode.set(address, code); }
-export function setContractStorage(address: string, storage: Map<string, any>): void { contractStorage.set(address, storage);}
+export function setContractStorage(address: string, storage: Map<string, any>): void { contractStorage.set(address, storage); }
 export function setContractEvents(txId: string, events: ContractEvent[]): void { contractEvents.set(txId, events); }
 export function setUnbondingDelegations(unbonding: { id: string; delegatorAddress: string; validatorAddress: string; amount: number; releaseTime: number }): void {
-    unbondingDelegations.set(unbonding.id, unbonding);
+  unbondingDelegations.set(unbonding.id, unbonding);
 }
 export function deleteUnbondingDelegation(id: string): void {
-    unbondingDelegations.delete(id);
+  unbondingDelegations.delete(id);
 }
 
 export function clearLedger(): void {
@@ -43,32 +47,39 @@ export function clearLedger(): void {
   contractStorage.clear();
   contractEvents.clear();
   unbondingDelegations.clear();
-  logger.info('[Ledger] In-memory ledger cleared.');
+  log.info('[Ledger] In-memory ledger cleared.');
 }
 
-export function saveLedgerToDisk(): void {
+
+import { db } from './services/database.js';
+
+export async function saveLedgerToDisk(): Promise<void> {
   try {
-    const state = {
-      balances: Array.from(balances.entries()),
-      nonces: Array.from(nonces.entries()),
-      contractCode: Array.from(contractCode.entries()),
-      contractStorage: Array.from(contractStorage.entries()).map(([k, v]) => [k, Array.from(v.entries())]),
-      contractEvents: Array.from(contractEvents.entries()),
-      unbondingDelegations: Array.from(unbondingDelegations.entries())
-    };
-    fs.writeFileSync(LEDGER_FILE, JSON.stringify(state, null, 2));
-    logger.info('[Ledger] State snapshot saved to disk.');
+    const batchOps = [
+      { type: 'put', key: 'ledger:balances', value: Array.from(balances.entries()) },
+      { type: 'put', key: 'ledger:nonces', value: Array.from(nonces.entries()) },
+      { type: 'put', key: 'ledger:contractCode', value: Array.from(contractCode.entries()) },
+      { type: 'put', key: 'ledger:contractStorage', value: Array.from(contractStorage.entries()).map(([k, v]) => [k, Array.from(v.entries())]) },
+      { type: 'put', key: 'ledger:contractEvents', value: Array.from(contractEvents.entries()) },
+      { type: 'put', key: 'ledger:unbondingDelegations', value: Array.from(unbondingDelegations.entries()) }
+    ];
+
+    // writing the batch to LevelDB
+    await db.batch(batchOps as any);
+    log.info(`[Ledger] State snapshot saved to LevelDB.`);
   } catch (err: any) {
-    logger.error(`[Ledger] Failed to save state to disk: ${err.message || String(err)}`);
+    log.error(`[Ledger] Failed to save state to DB`, { err });
   }
 }
 
-export function loadLedgerFromDisk(): boolean {
-  if (!fs.existsSync(LEDGER_FILE)) return false;
+export async function loadLedgerFromDisk(): Promise<boolean> {
   try {
-    const raw = fs.readFileSync(LEDGER_FILE, 'utf-8');
-    const state = JSON.parse(raw);
-    
+    const rawBalances = await db.get('ledger:balances');
+    if (!rawBalances) {
+      log.info('[Ledger] No previous state found in DB.');
+      return false;
+    }
+
     balances.clear();
     nonces.clear();
     contractCode.clear();
@@ -76,17 +87,21 @@ export function loadLedgerFromDisk(): boolean {
     contractEvents.clear();
     unbondingDelegations.clear();
 
-    balances = new Map(state.balances);
-    nonces = new Map(state.nonces);
-    contractCode = new Map(state.contractCode);
-    contractStorage = new Map(state.contractStorage.map(([k, v]: [string, any]) => [k, new Map(v)]));
-    contractEvents = new Map(state.contractEvents);
-    unbondingDelegations = new Map(state.unbondingDelegations);
+    balances = new Map(rawBalances);
+    nonces = new Map(await db.get('ledger:nonces') || []);
+    contractCode = new Map(await db.get('ledger:contractCode') || []);
 
-    logger.info('[Ledger] State snapshot loaded from disk.');
+    const rawContractStorage = await db.get('ledger:contractStorage') || [];
+    contractStorage = new Map(rawContractStorage.map(([k, v]: [string, any]) => [k, new Map(v)]));
+
+    contractEvents = new Map(await db.get('ledger:contractEvents') || []);
+    unbondingDelegations = new Map(await db.get('ledger:unbondingDelegations') || []);
+
+    log.info('[Ledger] State snapshot loaded from LevelDB.');
     return true;
-  } catch(err: any) {
-    logger.error(`[Ledger] Failed to load state from disk: ${err.message || String(err)}`);
+  } catch (err: any) {
+    if (err.code === 'LEVEL_NOT_FOUND') return false;
+    log.error(`[Ledger] Failed to load state from disk: ${err.message || String(err)}`);
     return false;
   }
 }

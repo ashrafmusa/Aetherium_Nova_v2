@@ -1,1 +1,43 @@
+# Environment
 .env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+aetherium-nova-explorer/node_modules/
+
+# Build output
+dist/
+aetherium-nova-explorer/dist/
+
+# Chain / ledger runtime state
+data/
+chain.v2.json
+ledger.snapshot.json
+staking.ledger.json
+
+# Logs
+logs/
+*.log
+miner_debug.log
+
+# Debug artefacts
+debug_log.txt
+hash_debug.txt
+miner_data.json
+miner_hash.txt
+block_debug_node.json
+block_debug_node_hash.txt
+
+# Sensitive key material
+temp_private_key.pem
+wallets/
+
+# OS
+.DS_Store
+Thumbs.db
+# Python cache
+__pycache__/
+*.pyc
+*.pyo

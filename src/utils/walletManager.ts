@@ -13,7 +13,7 @@ const WALLETS_DIR = path.join(process.cwd(), "wallets");
  * @param address The address of the wallet to load.
  * @returns The decrypted Wallet object, or null if not found/failed.
  */
-export async function loadAndDecryptWallet(address: string): Promise<Wallet | null> {
+export async function loadAndDecryptWallet(address: string, autoPassphrase?: string): Promise<Wallet | null> {
   const walletPath = path.join(WALLETS_DIR, `${address}.json`);
 
   if (!fs.existsSync(walletPath)) {
@@ -26,6 +26,16 @@ export async function loadAndDecryptWallet(address: string): Promise<Wallet | nu
     if (!walletData.isEncrypted) {
       console.warn(chalk.yellow(`⚠️  WARNING: Wallet ${address.slice(0, 10)}... is NOT ENCRYPTED. It's unsafe to use without encryption.`));
       return walletData;
+    }
+
+    if (autoPassphrase) {
+      try {
+        const decryptedPrivateKey = decryptPrivateKey(walletData.privateKey, autoPassphrase);
+        return { ...walletData, privateKey: decryptedPrivateKey, isEncrypted: false };
+      } catch (e) {
+        console.error(chalk.red("❌ Incorrect passphrase (auto)."));
+        return null;
+      }
     }
 
     let passphrase = '';

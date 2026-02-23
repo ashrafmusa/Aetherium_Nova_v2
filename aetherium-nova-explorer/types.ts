@@ -71,3 +71,7 @@ export interface NetworkState {
     mempool: Transaction[];
     validators: Omit<Validator, 'secretKey'>[];
 }
+export interface WalletState {
+  balance: number;
+  stakes: Stake[];
+}

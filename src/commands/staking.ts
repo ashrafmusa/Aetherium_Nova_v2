@@ -38,8 +38,8 @@ export function registerStakingCommands(program: Command) {
       try {
         const nonce = await fetchNonce(from);
         if (nonce === null) {
-            spinner.fail(chalk.red(`❌ Failed to fetch nonce for ${from}.`));
-            return;
+          spinner.fail(chalk.red(`❌ Failed to fetch nonce for ${from}.`));
+          return;
         }
         spinner.text = chalk.cyan("Nonce fetched. Creating and sending stake transaction...");
 
@@ -52,15 +52,16 @@ export function registerStakingCommands(program: Command) {
             fee,
             nonce,
             publicKey: wallet.publicKey,
+            hash: ''
           },
           wallet.privateKey
         );
 
         const res = await sendTransaction(tx);
         if (res) {
-            spinner.succeed(chalk.green(`✅ Stake transaction accepted. (TxID: ${res.txId.slice(0, 10)}...)`));
+          spinner.succeed(chalk.green(`✅ Stake transaction accepted. (TxID: ${res.txId.slice(0, 10)}...)`));
         } else {
-            spinner.fail(chalk.red("❌ Failed to send stake transaction."));
+          spinner.fail(chalk.red("❌ Failed to send stake transaction."));
         }
       } catch (err: any) {
         spinner.fail(chalk.red("❌ An unexpected error occurred during staking."));
@@ -96,8 +97,8 @@ export function registerStakingCommands(program: Command) {
       try {
         const nonce = await fetchNonce(from);
         if (nonce === null) {
-            spinner.fail(chalk.red(`❌ Failed to fetch nonce for ${from}.`));
-            return;
+          spinner.fail(chalk.red(`❌ Failed to fetch nonce for ${from}.`));
+          return;
         }
         spinner.text = chalk.cyan("Nonce fetched. Creating and sending unstake transaction...");
 
@@ -110,15 +111,16 @@ export function registerStakingCommands(program: Command) {
             fee,
             nonce,
             publicKey: wallet.publicKey,
+            hash: ''
           },
           wallet.privateKey
         );
 
         const res = await sendTransaction(tx);
         if (res) {
-            spinner.succeed(chalk.green(`✅ Unstake transaction accepted. (TxID: ${res.txId.slice(0, 10)}...)`));
+          spinner.succeed(chalk.green(`✅ Unstake transaction accepted. (TxID: ${res.txId.slice(0, 10)}...)`));
         } else {
-            spinner.fail(chalk.red("❌ Failed to send unstake transaction."));
+          spinner.fail(chalk.red("❌ Failed to send unstake transaction."));
         }
       } catch (err: any) {
         spinner.fail(chalk.red("❌ An unexpected error occurred during unstaking."));
@@ -151,8 +153,8 @@ export function registerStakingCommands(program: Command) {
       try {
         const nonce = await fetchNonce(from);
         if (nonce === null) {
-            spinner.fail(chalk.red(`❌ Failed to fetch nonce for ${from}.`));
-            return;
+          spinner.fail(chalk.red(`❌ Failed to fetch nonce for ${from}.`));
+          return;
         }
         spinner.text = chalk.cyan("Nonce fetched. Creating and sending claim rewards transaction...");
 
@@ -165,15 +167,16 @@ export function registerStakingCommands(program: Command) {
             fee,
             nonce,
             publicKey: wallet.publicKey,
+            hash: ''
           },
           wallet.privateKey
         );
 
         const res = await sendTransaction(tx);
         if (res) {
-            spinner.succeed(chalk.green(`✅ Claim rewards transaction accepted. (TxID: ${res.txId.slice(0, 10)}...)`));
+          spinner.succeed(chalk.green(`✅ Claim rewards transaction accepted. (TxID: ${res.txId.slice(0, 10)}...)`));
         } else {
-            spinner.fail(chalk.red("❌ Failed to send claim rewards transaction."));
+          spinner.fail(chalk.red("❌ Failed to send claim rewards transaction."));
         }
       } catch (err: any) {
         spinner.fail(chalk.red("❌ An unexpected error occurred during claiming rewards."));

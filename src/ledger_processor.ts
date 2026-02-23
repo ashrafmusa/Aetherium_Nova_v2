@@ -1,16 +1,25 @@
 // src/ledger_processor.ts (Corrected)
-import { type Block } from "./chain.js";
+import { type Block } from "./types.js";
 import { TxType, generateContractAddress, getTransactionId } from "./Transaction.js";
-import { setBalance, setNonce, getBalance, getContractCode, getContractStorage, setContractStorage, clearLedger as clearLedgerState, getNonceForAddress, _getBalancesMap, _getNoncesMap, _getContractCodeMap, _getContractStorageMap, _setBalancesMap, _setNoncesMap, _setContractCodeMap, _setContractStorageMap } from "./ledger.js";
+import { setBalance, setNonce, getBalance, getContractCode, getContractStorage, setContractStorage, clearLedger as clearLedgerState, getNonceForAddress } from "./ledger.js";
 import { executeContract } from "./vm.js";
 import { GENESIS_CONFIG } from "./config.js";
-import logger from "./logger.js";
+import { getLogger } from "./logger.js";
 import { addOrUpdateValidator, getValidator, distributeRewards, clearStakingLedger, type Validator, slashValidator } from "./staking.js";
 import { setContractCode } from "./ledger.js";
+
+const logger = getLogger();
 export { clearLedgerState as clearLedger };
 
 export function processBlockTransactions(block: Block): boolean {
     const seenTxIds = new Set<string>();
+    let rewardTxCount = 0;
+
+    // Pre-compute total fees from non-reward transactions for reward validation
+    const totalBlockFees = block.data
+        .filter(tx => tx.type !== TxType.REWARD && tx.from !== 'coinbase')
+        .reduce((sum, tx) => sum + tx.fee, 0);
+    const maxAllowedReward = GENESIS_CONFIG.baseReward + totalBlockFees;
 
     for (const tx of block.data) {
         // --- Pre-execution Checks (Crucial) ---
@@ -24,8 +33,19 @@ export function processBlockTransactions(block: Block): boolean {
 
         if (tx.from === 'coinbase' || tx.type === TxType.REWARD) {
             if (tx.type !== TxType.REWARD) {
-              logger.warn(`[TxValidation] Rejected invalid coinbase/reward transaction type: ${tx.type}`);
-              return false;
+                logger.warn(`[TxValidation] Rejected invalid coinbase/reward transaction type: ${tx.type}`);
+                return false;
+            }
+            rewardTxCount++;
+            if (rewardTxCount > 1) {
+                logger.error(`[Ledger] Block ${block.index} contains multiple REWARD transactions. Block invalid.`);
+                slashValidator(block.proposer, GENESIS_CONFIG.slashPercentage);
+                return false;
+            }
+            if (block.index > 0 && tx.amount > maxAllowedReward) {
+                logger.error(`[Ledger] REWARD amount ${tx.amount} exceeds maximum allowed ${maxAllowedReward} in block ${block.index}. Block invalid.`);
+                slashValidator(block.proposer, GENESIS_CONFIG.slashPercentage);
+                return false;
             }
             setBalance(tx.to, getBalance(tx.to) + tx.amount);
             // Distribute rewards here if needed
@@ -41,7 +61,7 @@ export function processBlockTransactions(block: Block): boolean {
 
         let fromBalance = getBalance(tx.from);
         let amountToDeduct = tx.amount + tx.fee;
-        
+
         if (tx.type === TxType.UNSTAKE || tx.type === TxType.CLAIM_REWARDS) {
             amountToDeduct = tx.fee;
         }
@@ -55,7 +75,7 @@ export function processBlockTransactions(block: Block): boolean {
 
         setBalance(tx.from, fromBalance - amountToDeduct);
         setNonce(tx.from, tx.nonce + 1);
-        
+
         switch (tx.type) {
             case TxType.TRANSFER:
                 setBalance(tx.to, getBalance(tx.to) + tx.amount);
@@ -140,10 +160,10 @@ export function processBlockTransactions(block: Block): boolean {
                     slashValidator(block.proposer, GENESIS_CONFIG.slashPercentage);
                     return false;
                 }
-                
+
                 const currentContractStorage = getContractStorage(tx.to);
                 const executionResult = executeContract(code, tx, block, currentContractStorage);
-                
+
                 if (!executionResult.success) {
                     logger.error(`[Ledger] Contract execution failed for tx ${txId.slice(0, 10)}... on contract ${tx.to.slice(0, 10)}...: ${executionResult.error}`);
                     slashValidator(block.proposer, GENESIS_CONFIG.slashPercentage);
@@ -167,41 +187,41 @@ export function processBlockTransactions(block: Block): boolean {
 }
 
 export function rebuildLedgerFromChain(chain: Block[]): boolean {
-  clearLedgerState();
-  clearStakingLedger();
+    clearLedgerState();
+    clearStakingLedger();
 
-  const BOOTSTRAP_ADDRESS = GENESIS_CONFIG.bootstrapAddress;
-  const BOOTSTRAP_FUNDS = GENESIS_CONFIG.bootstrapFunds;
+    const BOOTSTRAP_ADDRESS = GENESIS_CONFIG.bootstrapAddress;
+    const BOOTSTRAP_FUNDS = GENESIS_CONFIG.bootstrapFunds;
 
-  setBalance(BOOTSTRAP_ADDRESS, BOOTSTRAP_FUNDS);
-  setNonce(BOOTSTRAP_ADDRESS, 0);
+    setBalance(BOOTSTRAP_ADDRESS, BOOTSTRAP_FUNDS);
+    setNonce(BOOTSTRAP_ADDRESS, 0);
 
-  if (GENESIS_CONFIG.bootstrapStake && GENESIS_CONFIG.bootstrapStake > 0) {
-    setBalance(BOOTSTRAP_ADDRESS, getBalance(BOOTSTRAP_ADDRESS) - GENESIS_CONFIG.bootstrapStake);
-    // CORRECTED: Added publicKey to genesisValidator initialization
-    const genesisValidator: Validator = {
-        address: BOOTSTRAP_ADDRESS,
-        totalStake: GENESIS_CONFIG.bootstrapStake,
-        delegators: new Map([
-            [BOOTSTRAP_ADDRESS, { address: BOOTSTRAP_ADDRESS, amount: GENESIS_CONFIG.bootstrapStake, rewards: 0 }]
-        ]),
-        jailed: false,
-        slashCount: 0,
-        publicKey: '0'.repeat(64) // Placeholder for genesis
-    };
-    addOrUpdateValidator(genesisValidator);
-    logger.info('[Ledger Rebuild] Applied genesis pre-mine and validator stake.');
-  } else {
-    logger.info('[Ledger Rebuild] Applied genesis pre-mine without initial validator stake.');
-  }
-
-  logger.info('[Ledger] Starting ledger rebuild from chain...');
-  for (const block of chain.slice(1)) {
-    if (!processBlockTransactions(block)) {
-      logger.error(`[Ledger] Rebuild failed at block ${block.index}. This should not happen if chain is valid.`);
-      return false;
+    if (GENESIS_CONFIG.bootstrapStake && GENESIS_CONFIG.bootstrapStake > 0) {
+        setBalance(BOOTSTRAP_ADDRESS, getBalance(BOOTSTRAP_ADDRESS) - GENESIS_CONFIG.bootstrapStake);
+        // CORRECTED: Added publicKey to genesisValidator initialization
+        const genesisValidator: Validator = {
+            address: BOOTSTRAP_ADDRESS,
+            totalStake: GENESIS_CONFIG.bootstrapStake,
+            delegators: new Map([
+                [BOOTSTRAP_ADDRESS, { address: BOOTSTRAP_ADDRESS, amount: GENESIS_CONFIG.bootstrapStake, rewards: 0 }]
+            ]),
+            jailed: false,
+            slashCount: 0,
+            publicKey: '0'.repeat(64) // Placeholder for genesis
+        };
+        addOrUpdateValidator(genesisValidator);
+        logger.info('[Ledger Rebuild] Applied genesis pre-mine and validator stake.');
+    } else {
+        logger.info('[Ledger Rebuild] Applied genesis pre-mine without initial validator stake.');
     }
-  }
-  logger.info('[Ledger] Rebuild complete.');
-  return true;
+
+    logger.info('[Ledger] Starting ledger rebuild from chain...');
+    for (const block of chain.slice(1)) {
+        if (!processBlockTransactions(block)) {
+            logger.error(`[Ledger] Rebuild failed at block ${block.index}. This should not happen if chain is valid.`);
+            return false;
+        }
+    }
+    logger.info('[Ledger] Rebuild complete.');
+    return true;
 }

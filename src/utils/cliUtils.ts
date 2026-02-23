@@ -1,7 +1,9 @@
 // src/utils/cliUtils.ts (Corrected)
 import chalk from 'chalk';
 import { ZodError, ZodIssue } from 'zod';
-import logger from '../logger.js';
+import { getLogger } from '../logger.js';
+
+const logger = getLogger();
 
 // Helper to log errors consistently, especially from API responses or Zod validation
 export function logApiError(prefix: string, error: any): void {

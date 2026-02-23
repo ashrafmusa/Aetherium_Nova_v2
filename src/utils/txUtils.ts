@@ -1,6 +1,6 @@
 // src/utils/txUtils.ts (Corrected)
 import { signTransaction } from "../wallet.js";
-import { Transaction, getTransactionPayload } from "../Transaction.js";
+import { Transaction, getTransactionPayload, getTransactionId } from "../Transaction.js";
 
 /**
  * Creates and signs a transaction.
@@ -16,5 +16,7 @@ export function createTransaction(
   const txToSign: Partial<Transaction> = { ...details, timestamp };
   const payload = getTransactionPayload(txToSign);
   const signature = signTransaction(privateKey, payload);
-  return { ...details, timestamp, signature };
+  const transaction = { ...details, timestamp, signature, hash: '' };
+  transaction.hash = getTransactionId(transaction);
+  return transaction;
 }

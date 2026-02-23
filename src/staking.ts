@@ -1,13 +1,13 @@
-// src/staking.ts (Corrected)
-import logger from "./logger.js";
+import { getLogger } from './logger.js';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { setBalance, getBalance } from "./ledger.js";
 import { GENESIS_CONFIG } from './config.js';
-import { getBlockchain } from "./chain.js";
 import { TxType } from './Transaction.js';
 import { saveLedgerToDisk } from "./ledger.js";
+
+const logger = getLogger();
 
 const STAKING_LEDGER_FILE = path.resolve("staking.ledger.json");
 
@@ -49,36 +49,41 @@ export function clearStakingLedger(): void {
     logger.info('[Staking] In-memory staking ledger cleared.');
 }
 
-export function saveStakingLedgerToDisk(): void {
-  try {
-    const state = {
-        validators: Array.from(validators.entries()).map(([k, v]) => {
+import { db } from './services/database.js';
+
+export async function saveStakingLedgerToDisk(): Promise<void> {
+    try {
+        const validatorList = Array.from(validators.entries()).map(([k, v]) => {
+            // Convert Delegator Map to Array for storage
             const validatorCopy = { ...v, delegators: Array.from(v.delegators.entries()) };
             return [k, validatorCopy];
-        })
-    };
-    fs.writeFileSync(STAKING_LEDGER_FILE, JSON.stringify(state, null, 2));
-    logger.info('[Staking] Staking ledger snapshot saved to disk.');
-  } catch (err: any) {
-    logger.error(`[Staking] Failed to save staking ledger to disk: ${err.message || String(err)}`);
-  }
+        });
+
+        await db.put('staking:validators', validatorList);
+        logger.info('[Staking] Staking ledger snapshot saved to LevelDB.');
+    } catch (err: any) {
+        logger.error(`[Staking] Failed to save staking ledger to DB: ${err.message || String(err)}`);
+    }
 }
 
-export function loadStakingLedgerFromDisk(): boolean {
-    if (!fs.existsSync(STAKING_LEDGER_FILE)) return false;
+export async function loadStakingLedgerFromDisk(): Promise<boolean> {
     try {
-        const raw = fs.readFileSync(STAKING_LEDGER_FILE, 'utf-8');
-        const state = JSON.parse(raw);
+        const rawValidators = await db.get('staking:validators');
+        if (!rawValidators) {
+            logger.info('[Staking] No previous staking state found in DB.');
+            return false;
+        }
 
         validators.clear();
-        state.validators.forEach(([key, value]: [string, any]) => {
+        rawValidators.forEach(([key, value]: [string, any]) => {
             validators.set(key, { ...value, delegators: new Map(value.delegators) });
         });
-        
-        logger.info('[Staking] Staking ledger snapshot loaded from disk.');
+
+        logger.info('[Staking] Staking ledger snapshot loaded from LevelDB.');
         return true;
     } catch (err: any) {
-        logger.error(`[Staking] Failed to load state from disk: ${err.message || String(err)}`);
+        if (err.code === 'LEVEL_NOT_FOUND') return false;
+        logger.error(`[Staking] Failed to load staking state from DB: ${err.message || String(err)}`);
         return false;
     }
 }
@@ -90,13 +95,13 @@ export function slashValidator(address: string, percentage: number): void {
         validator.totalStake -= slashedAmount;
         setBalance(address, getBalance(address) + slashedAmount);
         validator.slashCount = (validator.slashCount ?? 0) + 1;
-        
+
         if (validator.slashCount && validator.slashCount >= (GENESIS_CONFIG.maxSlashCount ?? 3)) {
             validator.jailed = true;
             validator.jailedSince = Date.now();
             logger.warn(`[Staking] Validator ${address.slice(0, 10)}... has been jailed for exceeding max slash count.`);
         }
-        
+
         logger.warn(`[Staking] Validator ${address.slice(0, 10)}... slashed by ${percentage * 100}%. New stake: ${validator.totalStake}`);
         addOrUpdateValidator(validator);
     }
@@ -114,7 +119,7 @@ export function distributeRewards(proposerAddress: string, amount: number): void
 
     setBalance(proposerAddress, getBalance(proposerAddress) + validatorShare);
     logger.info(`[Staking] Validator ${proposerAddress.slice(0, 10)}... received ${validatorShare.toFixed(4)} AN reward.`);
-    
+
     let totalDelegatedStake = 0;
     validator.delegators.forEach(d => {
         totalDelegatedStake += d.amount;
@@ -144,7 +149,7 @@ export function chooseNextBlockProposer(lastBlockHash: string): string | undefin
 
     const seed = Number(hashAsNumber);
     const randomIndex = seed % activeValidators.length;
-    
+
     return activeValidators[randomIndex].address;
 }
 
@@ -152,10 +157,10 @@ export function updateEpochValidatorSet(currentBlockIndex: number, currentBlockH
     if (currentBlockIndex === 0) {
         const bootstrapValidator = getValidator(GENESIS_CONFIG.bootstrapAddress);
         if (bootstrapValidator) {
-             bootstrapValidator.publicKey = '0'.repeat(64);
-             addOrUpdateValidator(bootstrapValidator);
+            bootstrapValidator.publicKey = '0'.repeat(64);
+            addOrUpdateValidator(bootstrapValidator);
         } else {
-             const genesisValidator: Validator = {
+            const genesisValidator: Validator = {
                 address: GENESIS_CONFIG.bootstrapAddress,
                 totalStake: GENESIS_CONFIG.bootstrapStake,
                 delegators: new Map(),
