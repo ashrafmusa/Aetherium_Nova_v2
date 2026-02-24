@@ -3,6 +3,32 @@
 This guide walks through deploying a live Aetherium Nova validator node on
 **Oracle Cloud Always Free** (Ampere A1 ARM — 4 vCPU, 24 GB RAM, zero cost).
 
+> **Note — Saved for later:** Oracle Cloud requires a credit card for identity
+> verification only (you are **not charged** on the Always Free tier). This
+> document is complete and ready to follow the moment you have a card.
+
+---
+
+## ✅ Quick Checklist — Do These in Order When Ready
+
+```
+[ ] 1. Get a credit/debit card (prepaid cards work in most regions)
+[ ] 2. Create Oracle Cloud account at cloud.oracle.com
+        → Use the card for verification — $0 is charged
+        → Select your nearest Home Region (cannot change later)
+[ ] 3. Run deploy\generate-ssh-key.ps1 on Windows → copy the public key
+[ ] 4. Create VM: Ubuntu 22.04 · VM.Standard.A1.Flex · 4 OCPU · 24 GB RAM
+[ ] 5. Open Security List ports: TCP 3001 (API) + TCP 6001 (P2P)
+[ ] 6. SSH in: ssh -i ~/.ssh/aetherium-oci ubuntu@<PUBLIC_IP>
+[ ] 7. Run: curl -fsSL https://raw.githubusercontent.com/ashrafmusa/Aetherium_Nova_v2/main/deploy/setup-oracle.sh | sudo bash
+[ ] 8. Copy wallet file via scp (see Step 6 below)
+[ ] 9. Set MINER_ADDRESS + WALLET_PASSWORD in /etc/aetherium-nova/.env
+[ ] 10. systemctl restart aetherium-nova → node is live and mining
+```
+
+**Everything in this repo is already built and tested.**
+The setup script handles Node.js, build, systemd, Nginx, and firewall automatically.
+
 ---
 
 ## Prerequisites
