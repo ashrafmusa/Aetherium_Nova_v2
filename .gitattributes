@@ -1,0 +1,18 @@
+# Default — normalize line endings to LF on checkout
+* text=auto
+
+# Shell scripts must always use LF (otherwise #!/usr/bin/env bash breaks on Linux)
+*.sh text eol=lf
+
+# Windows-only scripts — keep CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files — no conversion
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+*.ldb  binary
