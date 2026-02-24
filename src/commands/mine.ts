@@ -20,12 +20,14 @@ export function registerMineCommand(program: Command) {
   program
     .command("mine")
     .description("Propose a block as the configured miner")
-    .action(async () => {
+    .option('-a, --auto', 'continually mine blocks until the mempool is empty')
+    .option('-i, --interval <ms>', 'interval between auto-mines', parseInt, 5000)
+    .action(async (options) => {
       if (!MINER_ADDRESS) {
         console.error(chalk.red("❌ MINER_ADDRESS environment variable is not set. Cannot mine."));
         return;
       }
-      
+
       console.log(chalk.cyan(`Loading miner wallet (${MINER_ADDRESS.slice(0, 10)}...)`));
 
       const passphrase = process.env.WALLET_PASSWORD;
@@ -37,7 +39,7 @@ export function registerMineCommand(program: Command) {
         process.exit(1);
       }
       console.log(chalk.green("✔ Wallet loaded."));
-      
+
       try {
         console.log(chalk.cyan("Fetching latest block and mempool..."));
         const latestBlock = await getLatestBlock();
@@ -52,18 +54,22 @@ export function registerMineCommand(program: Command) {
         const transactionsToInclude = pendingTxs.slice(0, GENESIS_CONFIG.maxTransactionsPerBlock);
         const totalFees = transactionsToInclude.reduce((sum, tx) => sum + tx.fee, 0);
         const blockReward = GENESIS_CONFIG.baseReward + totalFees;
+
+        // use a single timestamp for the block and reward tx so client & server agree
+        const timestamp = Date.now();
         const rewardTx = createRewardTransaction(MINER_ADDRESS, blockReward);
+        rewardTx.timestamp = timestamp;
         rewardTx.hash = getTransactionId(rewardTx);
         const finalTransactions = [...transactionsToInclude, rewardTx];
 
         const blockPayloadToSign = {
-            index: latestBlock.index + 1,
-            previousHash: latestBlock.hash,
-            timestamp: Date.now(),
-            data: finalTransactions,
-            proposer: MINER_ADDRESS,
-            proposerPublicKey: wallet.publicKey,
-            shardId: latestBlock.shardId,
+          index: latestBlock.index + 1,
+          previousHash: latestBlock.hash,
+          timestamp,
+          data: finalTransactions,
+          proposer: MINER_ADDRESS,
+          proposerPublicKey: wallet.publicKey,
+          shardId: latestBlock.shardId,
         };
 
         const blockHash = calculateBlockHash(blockPayloadToSign);
@@ -71,9 +77,22 @@ export function registerMineCommand(program: Command) {
         fs.writeFileSync('miner_data.json', JSON.stringify(blockPayloadToSign.data));
         fs.writeFileSync('miner_hash.txt', blockHash);
 
-        const blockSignature = signTransaction(wallet.privateKey, blockHash);
-        
-        const newBlock = { ...blockPayloadToSign, hash: blockHash, signature: blockSignature };
+        // sign the pre‑computed hash (avoid double hashing)
+        const blockSignature = signTransaction(wallet.privateKey, blockHash, true);
+
+        // when sending the block to the node, omit the reward transaction itself
+        // so the node can compute it independently (using the same timestamp).
+        const newBlock = {
+          index: blockPayloadToSign.index,
+          previousHash: blockPayloadToSign.previousHash,
+          timestamp: blockPayloadToSign.timestamp,
+          data: transactionsToInclude, // only mempool txs
+          proposer: blockPayloadToSign.proposer,
+          proposerPublicKey: blockPayloadToSign.proposerPublicKey,
+          shardId: blockPayloadToSign.shardId,
+          hash: blockHash,
+          signature: blockSignature,
+        };
 
         console.log(chalk.cyan("Signing and sending block proposal to node..."));
 
@@ -81,13 +100,18 @@ export function registerMineCommand(program: Command) {
 
         if (res && res.block) {
           console.log(chalk.green("✅ Block proposed: ") + chalk.yellow(res.block.hash.slice(0, 10) + "..."));
-            console.log(chalk.blue("📦 Block Index:"), chalk.yellow(res.block.index));
+          console.log(chalk.blue("📦 Block Index:"), chalk.yellow(res.block.index));
         } else {
           console.error(chalk.red(`❌ Block proposal failed: ${res?.error || 'Unknown error'}`));
         }
       } catch (err: any) {
         console.error(chalk.red("❌ An unexpected error occurred during mining."));
-        console.error(err); 
+        console.error(err);
+      }
+
+      // if auto option, schedule next mine
+      if (options.auto) {
+        setTimeout(() => program.parseAsync(process.argv), options.interval);
       }
     });
 }

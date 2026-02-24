@@ -85,7 +85,7 @@ function createGenesisBlock(): Block {
     const height = await db.getChainHeight();
 
     if (height >= 0) {
-      // Reconstruct chain from DB
+      // A height of 0 means genesis was already persisted; anything > 0 means more blocks exist.
       logger.info(`[Chain] Loading chain from DB (Height: ${height})...`);
       const loadedChain: Block[] = [];
       for (let i = 0; i <= height; i++) {
@@ -99,16 +99,16 @@ function createGenesisBlock(): Block {
         // Verify version/structure if needed, or assume DB is truth
 
         const ledgerLoaded = await loadLedgerFromDisk();
-        const stakingLedgerLoaded = loadStakingLedgerFromDisk(); // This needs update too, but focusing on main ledger first
+        const stakingLedgerLoaded = await loadStakingLedgerFromDisk();
 
-        if (!ledgerLoaded) { // || !stakingLedgerLoaded
+        if (!ledgerLoaded || !stakingLedgerLoaded) {
           logger.warn('[Chain] Ledger snapshot not found or corrupted, rebuilding from chain...');
           const rebuildSuccess = await rebuildLedgerFromChain(chain);
           if (!rebuildSuccess) {
             throw new Error("Failed to rebuild ledgers from chain during startup.");
           }
           await saveLedgerToDisk();
-          // saveStakingLedgerToDisk();
+          await saveStakingLedgerToDisk();
         }
         logger.info(`[Chain] Loaded ${chain.length} blocks from DB.`);
       } else {
@@ -130,7 +130,7 @@ function createGenesisBlock(): Block {
 
         await db.saveBlock(0, genesisBlock);
         await saveLedgerToDisk();
-        // saveStakingLedgerToDisk();
+        await saveStakingLedgerToDisk();
         logger.info(`[Chain] Genesis block created and initial state saved.`);
       }
     }
@@ -143,6 +143,7 @@ function createGenesisBlock(): Block {
     if (chain.length === 0) {
       chain = [createGenesisBlock()];
       await rebuildLedgerFromChain(chain);
+      await saveStakingLedgerToDisk();
     }
   }
 })();
@@ -160,12 +161,21 @@ export async function proposeBlock(
   mempool: any
 ): Promise<Block | null> {
   const lastBlock = getLatestBlock();
-  const transactionsToInclude = pendingTxs.slice(0, GENESIS_CONFIG.maxTransactionsPerBlock);
+  // make sure we only include user-submitted transactions (no reward tx which
+  // may have been attached by a naive client).  The consensus reward is always
+  // calculated server-side based on fees and the known base reward.
+  const mempoolTxs = pendingTxs.filter(tx => tx.type !== TxType.REWARD);
+  const transactionsToInclude = mempoolTxs.slice(0, GENESIS_CONFIG.maxTransactionsPerBlock);
 
   const totalFees = transactionsToInclude.reduce((sum, tx) => sum + tx.fee, 0);
   const blockReward = GENESIS_CONFIG.baseReward + totalFees;
 
+  // build the reward transaction with the **same** timestamp that the proposer
+  // assigned to the block so both sides will hash the identical structure.
   const rewardTx = createRewardTransaction(proposerAddress, blockReward);
+  rewardTx.timestamp = timestamp;
+  rewardTx.hash = getTransactionId(rewardTx);
+
   const finalTransactions = [...transactionsToInclude, rewardTx];
 
   const blockData: Omit<Block, 'hash' | 'signature'> = {
@@ -180,7 +190,8 @@ export async function proposeBlock(
 
   const hash = calculateBlockHash(blockData);
 
-  if (!verifySignature(proposerPublicKey, hash, proposerSignature)) {
+  // `hash` is already a SHA256 string, avoid double hashing during verification
+  if (!verifySignature(proposerPublicKey, hash, proposerSignature, true)) {
     logger.error(`[Chain] Proposed block rejected: invalid signature.`);
     return null;
   }
@@ -301,7 +312,7 @@ export async function isValidChain(chainToValidate: Block[]): Promise<boolean> {
       return false;
     }
 
-    if (!verifySignature(currentBlock.proposerPublicKey, calculatedHash, signature)) {
+    if (!verifySignature(currentBlock.proposerPublicKey, calculatedHash, signature, true)) {
       logger.error(`[Chain] Invalid chain: Block signature verification failed for block ${currentBlock.index}`);
       return false;
     }

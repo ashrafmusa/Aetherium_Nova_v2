@@ -1,6 +1,6 @@
 {
   "genesisBlockTimestamp": 1678886400000,
-  "bootstrapAddress": "0x226f8d6725e2e2f563b03c331bc56eaeb93a499f",
+  "bootstrapAddress": "0xd5ee6bc2c1afcbfaa68b3273caf9d4c17f4819e0",
   "bootstrapFunds": 1000000000000000,
   "bootstrapStake": 5000000,
   "minStake": 1000,

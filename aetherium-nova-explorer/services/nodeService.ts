@@ -4,13 +4,28 @@ import type { Transaction, Block, Wallet, Validator, NetworkState, WalletState }
 import { ec as EC } from 'elliptic';
 
 const ec = new EC('secp256k1');
-const API_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) || 'http://localhost:3002';
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+const API_KEY = import.meta.env.VITE_API_KEY ?? 'a-very-secret-key';
+
+const authHeaders: Record<string, string> = {
+    'x-api-key': API_KEY,
+};
 
 /** Derive a backend-compatible address from a secp256k1 public key.
  *  Backend formula (wallet.ts): '0x' + sha256(Buffer.from(publicKey, 'hex')).slice(0, 40)
  */
+function hexToBytes(hex: string): Uint8Array {
+    // browser-safe conversion
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    }
+    return bytes;
+}
+
 function deriveAddress(publicKeyHex: string): string {
-    return '0x' + sha256(Buffer.from(publicKeyHex, 'hex')).slice(0, 40);
+    // sha256 accepts a string or array; we pass binary bytes
+    return '0x' + sha256(hexToBytes(publicKeyHex)).slice(0, 40);
 }
 
 export class NodeService {
@@ -22,9 +37,9 @@ export class NodeService {
     public async getNetworkState(): Promise<NetworkState> {
         try {
             const [statusRes, chainRes, mempoolRes] = await Promise.all([
-                fetch(`${API_URL}/status`),
-                fetch(`${API_URL}/chain`),
-                fetch(`${API_URL}/mempool`)
+                fetch(`${API_URL}/status`, { headers: authHeaders }),
+                fetch(`${API_URL}/chain`, { headers: authHeaders }),
+                fetch(`${API_URL}/mempool`, { headers: authHeaders })
             ]);
 
             if (!statusRes.ok || !chainRes.ok || !mempoolRes.ok) {
@@ -74,7 +89,7 @@ export class NodeService {
             let address = publicKey;
             // If publicKey is NOT an address (does not start with 0x), we should assume it MIGHT be one if we generated it that way.
 
-            const res = await fetch(`${API_URL}/balance/${address}`);
+            const res = await fetch(`${API_URL}/balance/${address}`, { headers: authHeaders });
             if (!res.ok) return null;
             const data = await res.json();
 
@@ -109,7 +124,7 @@ export class NodeService {
         try {
             const res = await fetch(`${API_URL}/transaction`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { ...authHeaders, 'Content-Type': 'application/json' },
                 body: JSON.stringify(tx)
             });
             const data = await res.json();

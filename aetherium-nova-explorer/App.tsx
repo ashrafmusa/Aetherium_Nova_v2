@@ -109,8 +109,7 @@ const App: React.FC = () => {
   // Data fetching loop
   const syncWithNode = useCallback(async () => {
     try {
-      const state =
-        await nodeService.getNetworkState();
+      const state = await nodeService.getNetworkState();
       setStats(state.stats);
       setMempool(state.mempool);
       setBlocks(state.blocks);
@@ -497,29 +496,47 @@ const App: React.FC = () => {
   const renderHomePage = () => (
     <>
       <main>
-        <Hero />
+        <Hero
+          stats={stats}
+          setPage={setPage}
+          onOpenWhitepaper={() => setModalOpen(true)}
+        />
         <section
           id="introduction"
-          className="py-20 px-4 sm:px-6 lg:px-8 text-center"
+          className="py-24 px-4 sm:px-6 lg:px-8 text-center"
         >
-          <h2 className="text-4xl font-bold text-white mb-4">
-            The Next Leap in Digital Freedom
-          </h2>
-          <p className="max-w-3xl mx-auto text-lg text-slate-400">
-            Aetherium Nova re-imagines the principles of Bitcoin for the next
-            generation. It's not just a peer-to-peer electronic cash system;
-            it's a secure, decentralized platform for value and computation,
-            engineered to be resilient, scalable, and intrinsically useful.
-          </p>
+          <div className="max-w-3xl mx-auto">
+            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 mb-6">
+              ◈ Next-Generation Infrastructure
+            </span>
+            <h2 className="text-4xl sm:text-5xl font-black text-white mb-6 leading-tight">
+              The Next Leap in
+              <br />
+              <span className="text-gradient-cyber">Digital Freedom</span>
+            </h2>
+            <p className="text-lg text-slate-400 leading-relaxed">
+              Aetherium Nova re-imagines the principles of Bitcoin for the next
+              generation. It's not just a peer-to-peer electronic cash system;
+              it's a secure, decentralized platform for value and computation,
+              engineered to be resilient, scalable, and intrinsically useful.
+            </p>
+          </div>
         </section>
         <section
           id="features"
-          className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-900/50"
+          className="py-24 px-4 sm:px-6 lg:px-8 bg-slate-900/30 relative"
         >
-          <div className="max-w-7xl mx-auto">
-            <h2 className="text-4xl font-bold text-white text-center mb-12">
-              Core Innovations
-            </h2>
+          <div className="absolute inset-0 cyber-grid opacity-30 pointer-events-none" />
+          <div className="relative max-w-7xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl sm:text-5xl font-black text-white mb-4">
+                Core Innovations
+              </h2>
+              <p className="text-slate-400 max-w-2xl mx-auto">
+                Six foundational technologies that make Aetherium Nova uniquely
+                suited for the decades ahead.
+              </p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {concepts.map((concept, index) => (
                 <ConceptCard
@@ -535,23 +552,36 @@ const App: React.FC = () => {
         {stats && <NetworkStats stats={stats} />}
         <section
           id="conclusion"
-          className="py-20 px-4 sm:px-6 lg:px-8 text-center"
+          className="py-24 px-4 sm:px-6 lg:px-8 text-center relative overflow-hidden"
         >
-          <h2 className="text-4xl font-bold text-white mb-4">
-            Building a Smarter, More Secure Future
-          </h2>
-          <p className="max-w-3xl mx-auto text-lg text-slate-400 mb-8">
-            By combining post-quantum security with a utility-driven consensus,
-            Aetherium Nova provides a foundation for a new wave of decentralized
-            innovation. Join us in building a more resilient and equitable
-            digital world.
-          </p>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="bg-cyan-500 hover:bg-cyan-400 text-white font-bold py-3 px-8 rounded-full transition-all duration-300 shadow-lg shadow-cyan-500/20"
-          >
-            Read the Whitepaper
-          </button>
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-950/10 to-indigo-950/20 pointer-events-none" />
+          <div className="relative max-w-4xl mx-auto">
+            <h2 className="text-4xl sm:text-5xl font-black text-white mb-6 leading-tight">
+              Building a Smarter,
+              <br />
+              <span className="text-gradient-cyber">More Secure Future</span>
+            </h2>
+            <p className="text-lg text-slate-400 mb-10 leading-relaxed">
+              By combining post-quantum security with a utility-driven
+              consensus, Aetherium Nova provides a foundation for a new wave of
+              decentralized innovation. Join us in building a more resilient and
+              equitable digital world.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <button
+                onClick={() => setModalOpen(true)}
+                className="btn-cyber bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-4 px-10 rounded-full transition-all duration-300 shadow-glow-cyan"
+              >
+                Read the Whitepaper
+              </button>
+              <button
+                onClick={() => setPage("network")}
+                className="btn-cyber border border-slate-700 hover:border-cyan-500/50 text-white font-semibold py-4 px-10 rounded-full transition-all duration-300 hover:bg-cyan-500/5"
+              >
+                Explore the Chain
+              </button>
+            </div>
+          </div>
         </section>
       </main>
       <Footer />
@@ -559,15 +589,21 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className="bg-slate-900 text-slate-300 min-h-screen font-sans">
-      <div className="absolute top-0 left-0 w-full h-full bg-grid-slate-700/[0.05] [mask-image:linear-gradient(0deg,transparent,black)]"></div>
+    <div className="bg-slate-950 text-slate-300 min-h-screen font-sans">
       <div className="relative z-10">
-        <Header currentPage={page} setPage={setPage} isSyncing={isSyncing} />
-        {isSyncing && (
-          <div className="p-4 text-center">Syncing with the network...</div>
-        )}
+        <Header
+          currentPage={page}
+          setPage={setPage}
+          isSyncing={isSyncing}
+          walletAddress={wallet?.publicKey}
+        />
         {syncError && (
-          <div className="p-4 text-center text-red-500">Error: {syncError}</div>
+          <div className="mx-auto max-w-7xl px-4 pt-3">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              <span>⚠</span>
+              <span>Node unreachable: {syncError}. Retrying...</span>
+            </div>
+          </div>
         )}
         {page === "home" && renderHomePage()}
         {stats && page === "network" && (
@@ -586,6 +622,7 @@ const App: React.FC = () => {
             setPage={setPage}
             onSend={handleSend}
             mempool={mempool}
+            setWallet={setWallet}
           />
         )}
         {page === "staking" && (

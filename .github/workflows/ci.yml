@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Build backend (TypeScript → dist/)
+        run: npm run build
+
+      - name: Run backend tests
+        run: npm test
+        env:
+          API_KEY: ci-test-key
+          NODE_ENV: test
+
+      - name: Install explorer dependencies
+        working-directory: aetherium-nova-explorer
+        run: npm ci
+
+      - name: Build explorer (Vite production bundle)
+        working-directory: aetherium-nova-explorer
+        env:
+          VITE_API_URL: http://localhost:3001
+          VITE_API_KEY: ci-test-key
+        run: npm run build
+
+  lint:
+    name: Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check (backend)
+        run: npx tsc --noEmit
+
+      - name: Install explorer dependencies
+        working-directory: aetherium-nova-explorer
+        run: npm ci
+
+      - name: TypeScript type check (explorer)
+        working-directory: aetherium-nova-explorer
+        run: npx tsc --noEmit

@@ -71,32 +71,18 @@ export function generateAddress(publicKeyHex: string): string {
  * @param payload The data to be signed (string).
  * @returns The signature string (DER Hex).
  */
-export function signTransaction(privateKeyHex: string, payload: string): string {
-  // Payload should be hashed first? 
-  // 'elliptic' sign takes a message (hash) or array.
-  // Usually we sign the HASH of the payload.
-  // Transaction.ts getTransactionId returns a HASH.
-  // Transaction.ts VALIDATION calls verifySignature(pk, payload, sig).
-  // Frontend `sign` in cryptoUtils: 
-  // export const sign = (hash: string, secretKey: string): string => {
-  //   const key = ec.keyFromPrivate(secretKey, 'hex');
-  //   const signature = key.sign(hash, 'base64'); // WAIT? Base64?
-  //   return signature.toDER('hex');
-  // };
-  // Frontend sign takes HASH. 
-  // Backend `Transaction.ts` calls verifySignature with `payloadForVerification` which is the RAW STRING?
-  // Let's re-read Transaction.ts verifySignature usage.
+export function signTransaction(privateKeyHex: string, payload: string, alreadyHashed = false): string {
+  // If the caller has already computed the SHA‑256 hash of the payload (e.g. when
+  // mining a block) they can set `alreadyHashed` to true so we don't hash a hash
+  // again.  All other callers should leave this false and supply the raw string.
+  // The frontend `sign` helper also operates on a hash, so when the UI generates
+  // a signature it hashes first and passes that value in.
 
-  // Transaction.ts Line 110: const payloadForVerification = getTransactionPayload(tx);
-  // Line 112: verifySignature(tx.publicKey, payloadForVerification, tx.signature)
-  // Logic: verifySignature must HASH the payload before verifying if strict.
-  // Frontend cryptoUtils `sign` expects `hash`.
-  // So backend `signTransaction` and `verifySignature` should HASH the payload first to match frontend which signs the hash.
-
-  const payloadHash = crypto.createHash('sha256').update(payload).digest('hex');
+  const payloadHash = alreadyHashed
+    ? payload
+    : crypto.createHash('sha256').update(payload).digest('hex');
   const key = ec.keyFromPrivate(privateKeyHex, 'hex');
-  const signature = key.sign(payloadHash, 'hex'); // 'hex' encoding for input hash? elliptic doc says array or hex if encoding set?
-  // Elliptic .sign(msg, enc, options).
+  const signature = key.sign(payloadHash, 'hex');
   return signature.toDER('hex');
 }
 
@@ -107,9 +93,11 @@ export function signTransaction(privateKeyHex: string, payload: string): string 
  * @param signatureHex The signature to verify (DER Hex).
  * @returns True if the signature is valid, otherwise false.
  */
-export function verifySignature(publicKeyHex: string, payload: string, signatureHex: string): boolean {
+export function verifySignature(publicKeyHex: string, payload: string, signatureHex: string, alreadyHashed = false): boolean {
   try {
-    const payloadHash = crypto.createHash('sha256').update(payload).digest('hex');
+    const payloadHash = alreadyHashed
+      ? payload
+      : crypto.createHash('sha256').update(payload).digest('hex');
     const key = ec.keyFromPublic(publicKeyHex, 'hex');
     return key.verify(payloadHash, signatureHex);
   } catch (e) {

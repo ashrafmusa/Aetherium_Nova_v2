@@ -1,72 +1,156 @@
-🚀 Aetherium Nova v2
-Aetherium Nova v2 is a full-featured, educational blockchain implementation built with Node.js and TypeScript. This project serves as a comprehensive backend for a decentralized network, showcasing the core components required to run a blockchain from the ground up, including a decentralized ledger, a peer-to-peer network, and a virtual machine for executing smart contracts.
+# Aetherium Nova
 
-It is designed to demonstrate the fundamental concepts of blockchain technology in a hands-on, runnable environment.
+[![CI](https://github.com/ashrafmusa/Aetherium_Nova_v2/actions/workflows/ci.yml/badge.svg)](https://github.com/ashrafmusa/Aetherium_Nova_v2/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ashrafmusa/Aetherium_Nova_v2/blob/main/.github/CONTRIBUTING.md)
 
-✨ Core Features
-This project embodies the key functionalities of a modern blockchain.
+**A next-generation Layer-1 blockchain built for the post-quantum era.**
 
-Decentralized Network: A robust peer-to-peer network layer that allows for communication and data synchronization between multiple nodes.
+Aetherium Nova is a fully operational blockchain network featuring a custom **Proof-of-Stake & Utility (PoSU)** consensus mechanism, a persistent ledger, a smart contract virtual machine, a P2P networking layer, and a production-grade web explorer — all built from the ground up in TypeScript.
 
-Blockchain & Ledger: A secure, append-only data structure that manages an immutable chain of blocks, while the ledger tracks the global state of the network.
+> 🌐 [Explorer](https://ashrafmusa.github.io/Aetherium_Nova_v2) | 📄 Whitepaper | 💬 Discord | 🐦 Twitter
 
-Transaction Pool (Mempool): A temporary holding area for unconfirmed transactions, ensuring they are ready to be included in the next block.
+---
 
-Proof-of-Stake & Utility (PoSU): A custom consensus mechanism that rewards validators for securing the network and contributing computational utility.
+## ✨ Why Aetherium Nova?
 
-Smart Contracts: A basic framework for creating and executing self-enforcing agreements on a custom Virtual Machine (VM).
+| Feature | Detail |
+|---|---|
+| **PoSU Consensus** | Hybrid Proof-of-Stake + Utility rewards — validators earn by both staking and contributing network utility |
+| **secp256k1 Cryptography** | Industry-standard elliptic curve signing, compatible with Bitcoin and Ethereum key formats |
+| **Persistent LevelDB Ledger** | Full state snapshot and recovery — nodes can restart and resync without reprocessing the entire chain |
+| **Smart Contract VM** | Custom sandboxed virtual machine for deterministic on-chain computation |
+| **P2P Networking** | WebSocket-based peer discovery, block propagation, and mempool sync |
+| **Production Explorer** | Full-featured React + Vite web explorer with wallet management, staking UI, and block/TX search |
+| **REST API** | Authenticated JSON API (rate-limited, helmet-secured, prometheus metrics) for wallets and dApps |
 
-Command-Line Interface (CLI): A powerful, interactive tool for users to engage with the blockchain, allowing them to query data, send transactions, and manage their wallets.
+---
 
-📂 Project Structure
-The project is organized into logical directories to ensure scalability, modularity, and maintainability.
+## 🏗️ Architecture
 
-src/: The root directory containing all of the project's source code.
+```
+aetherium-nova-v2/
+├── src/
+│   ├── node.ts          # Express HTTP server + REST API entry point
+│   ├── chain.ts         # Block structure, validation, and chain management
+│   ├── ledger.ts        # Global state: balances, nonces, contract storage
+│   ├── staking.ts       # PoSU validator registry, rewards, jailing
+│   ├── pool.ts          # Mempool — unconfirmed transaction queue
+│   ├── wallet.ts        # Key generation, signing, address derivation
+│   ├── vm.ts            # Smart contract execution sandbox
+│   ├── Transaction.ts   # Transaction types: TRANSFER, STAKE, UNSTAKE, CONTRACT
+│   ├── auth.ts          # API key authentication middleware
+│   ├── config.ts        # Network + genesis configuration
+│   └── services/
+│       ├── p2p.ts       # WebSocket P2P peer management
+│       └── database.ts  # LevelDB persistence layer
+└── aetherium-nova-explorer/
+    └── ...              # React 18 + Vite + Tailwind web explorer
+```
 
-src/commands/: Houses the different command modules for the CLI, such as mine.ts, query.ts, staking.ts, and transaction.ts.
+---
 
-src/contracts/: Contains the code for smart contracts that can be deployed onto the network.
+## 🚀 Quick Start
 
-src/services/: Includes services that abstract away specific functionalities, such as the apiService for external interactions.
+### Prerequisites
+- Node.js 20+
+- npm 9+
 
-src/utils/: A collection of reusable helper functions for cryptographic operations, CLI parsing, and other utilities.
-
-src/chain.ts: The central file for the blockchain's core logic, including block creation and validation.
-
-src/ledger.ts: Manages the state and balances of the network.
-
-src/node.ts: The main entry point for a running blockchain node.
-
-src/staking.ts: The implementation of the Proof-of-Stake consensus logic.
-
-src/vm.ts: The virtual machine responsible for executing smart contract code.
-
-src/wallet.ts: Manages all wallet-related functionalities, including key generation and transaction signing.
-
-🛠️ Technology Stack
-Node.js: The JavaScript runtime environment that powers the application.
-
-TypeScript: A superset of JavaScript that adds static typing, improving code quality and reducing bugs.
-
-npm: The default package manager for Node.js, used to manage project dependencies.
-
-🚀 Getting Started
-To get the project running locally, follow these simple steps.
-
-Clone the repository:
-
-git clone [https://github.com/your-username/aetherium-nova-v2.git](https://github.com/your-username/aetherium-nova-v2.git)
-cd aetherium-nova-v2
-
-Install the dependencies:
-
+### 1. Clone & Install
+```bash
+git clone https://github.com/ashrafmusa/Aetherium_Nova_v2.git
+cd Aetherium_Nova_v2
 npm install
+```
 
-Run the node:
+### 2. Build
+```bash
+npm run build
+```
 
-npm start
+### 3. Run a Node
+```bash
+API_KEY=your-secret-key node dist/node.js
+```
 
-This command will start a local blockchain node. You can then use the provided CLI to interact with it, creating new wallets, sending transactions, and exploring the network.
+Node starts at `http://localhost:3001` with P2P on port `6001`.
 
-⚠️ Disclaimer
-This is a conceptual and educational project. It is not connected to a live blockchain network and should not be used for real-world cryptocurrency transactions. The cryptographic functions and network logic are simplified for demonstration purposes.
+### 4. Run the Explorer
+```bash
+cd aetherium-nova-explorer
+npm install
+# Set env vars
+echo "VITE_API_URL=http://localhost:3001" > .env.local
+echo "VITE_API_KEY=your-secret-key" >> .env.local
+npx vite
+```
+
+Explorer available at `http://localhost:5173`.
+
+---
+
+## 🔌 REST API
+
+All endpoints require the `x-api-key` header.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/status` | Node height, peer count, mempool size |
+| GET | `/chain` | Full blockchain |
+| GET | `/mempool` | Pending transactions |
+| GET | `/balance/:address` | Address balance and nonce |
+| POST | `/transaction` | Submit a signed transaction |
+| POST | `/mine` | Propose a new block |
+| GET | `/metrics` | Prometheus metrics |
+
+---
+
+## ⛏️ CLI
+
+```bash
+# Create a wallet
+node dist/cli.js wallet create
+
+# Check balance
+node dist/cli.js query balance --address 0x...
+
+# Send tokens
+node dist/cli.js transaction send --to 0x... --amount 100
+
+# Stake
+node dist/cli.js staking stake --amount 1000
+
+# Mine a block
+MINER_ADDRESS=0x... node dist/cli.js mine
+```
+
+---
+
+## 🛠️ Tech Stack
+
+- **Runtime**: Node.js 22, TypeScript
+- **Consensus**: Custom PoSU (Proof-of-Stake & Utility)
+- **Crypto**: secp256k1 (elliptic), AES-256-GCM wallet encryption (PBKDF2-SHA512)
+- **Storage**: LevelDB
+- **API**: Express, Helmet, express-rate-limit, Prometheus
+- **P2P**: WebSockets (ws)
+- **Explorer**: React 18, Vite, Tailwind CSS
+
+---
+
+## 🤝 Contributing
+
+Pull requests are welcome. For major changes, open an issue first.
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feat/my-feature`)
+3. Commit your changes
+4. Push and open a PR
+
+---
+
+## 📄 License
+
+Apache 2.0 — see [LICENSE](LICENSE)

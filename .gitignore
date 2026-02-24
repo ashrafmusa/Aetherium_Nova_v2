@@ -30,9 +30,10 @@ miner_hash.txt
 block_debug_node.json
 block_debug_node_hash.txt
 
-# Sensitive key material
+# Sensitive key material — NEVER commit these
 temp_private_key.pem
 wallets/
+WALLET_SECRETS.md
 
 # OS
 .DS_Store

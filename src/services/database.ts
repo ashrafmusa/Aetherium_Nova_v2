@@ -13,9 +13,9 @@ export class DatabaseService {
   private constructor() {
     this.db = new Level(DB_PATH, { valueEncoding: 'json' });
     this.db.open().then(() => {
-        logger.info('[Database] LevelDB connected.');
+      logger.info('[Database] LevelDB connected.');
     }).catch(err => {
-        logger.error('[Database] Failed to open LevelDB:', err);
+      logger.error('[Database] Failed to open LevelDB:', err);
     });
   }
 
@@ -64,7 +64,10 @@ export class DatabaseService {
   }
 
   async getChainHeight(): Promise<number> {
-    return (await this.get('chain:height')) || 0;
+    const h = await this.get('chain:height');
+    // Return -1 when the key doesn't exist yet (brand-new / empty DB).
+    // 0 is a valid height (genesis block), so we must not conflate it with "not found".
+    return h !== null && h !== undefined ? (h as number) : -1;
   }
 }
 

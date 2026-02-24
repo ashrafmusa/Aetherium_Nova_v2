@@ -14,6 +14,10 @@ const WALLETS_DIR = path.join(process.cwd(), "wallets");
  * @returns The decrypted Wallet object, or null if not found/failed.
  */
 export async function loadAndDecryptWallet(address: string, autoPassphrase?: string): Promise<Wallet | null> {
+  // if caller didn't supply a passphrase, try environment variable
+  if (!autoPassphrase && process.env.WALLET_PASSWORD) {
+    autoPassphrase = process.env.WALLET_PASSWORD;
+  }
   const walletPath = path.join(WALLETS_DIR, `${address}.json`);
 
   if (!fs.existsSync(walletPath)) {
@@ -77,7 +81,7 @@ export async function loadAndDecryptWallet(address: string, autoPassphrase?: str
 export function saveWalletToDisk(wallet: Wallet, passphrase: string): void {
   fs.mkdirSync(WALLETS_DIR, { recursive: true });
   const filepath = path.join(WALLETS_DIR, `${wallet.address}.json`);
-  
+
   const encryptedPrivateKey = encryptPrivateKey(wallet.privateKey, passphrase);
   const walletToSave = { ...wallet, privateKey: encryptedPrivateKey, isEncrypted: true };
 

@@ -44,7 +44,8 @@ export function registerTransactionCommands(program: Command) {
           return;
         }
       } else {
-        wallet = await loadAndDecryptWallet(from);
+        const passphrase = process.env.WALLET_PASSWORD;
+        wallet = await loadAndDecryptWallet(from, passphrase);
         if (!wallet) {
           spinner.fail(chalk.red(`❌ Wallet not found or could not be decrypted for address: ${from}`));
           return;

@@ -4,10 +4,10 @@ import type { Transaction, Block, Wallet, Validator, NetworkState, WalletState }
 import { ec as EC } from 'elliptic';
 
 const ec = new EC('secp256k1');
-const API_URL = 'http://localhost:3000';
+const API_URL = 'http://localhost:3001';
 
 export class NodeService {
-    
+
     // =============================================================================
     // PUBLIC API - Methods exposed to the frontend
     // =============================================================================
@@ -25,16 +25,16 @@ export class NodeService {
             const pool = await mempoolRes.json();
 
             // The backend returns { version: "2.0", chain: [...] }
-            const blocks: Block[] = chain.chain.reverse(); 
+            const blocks: Block[] = chain.chain.reverse();
 
             // Backend doesn't expose validator detailed list easily yet, so we mock or fetch if available.
             // For now, we'll return an empty list or scrape from blocks if needed.
             // But types.ts says validators are in NetworkState.
             // Let's assume we can get validators from a new endpoint or just mock for now to not break UI.
             // I'll add a TODO to backend if needed.
-            
+
             // Actually, let's just allow empty validators list or minimal info.
-            const validators: any[] = []; 
+            const validators: any[] = [];
 
             return {
                 stats: {
@@ -61,27 +61,27 @@ export class NodeService {
         // For now, assuming publicKey IS the address if it starts with 0x, or we derive it.
         // Wait, typical ethereum: Address is last 20 bytes of PubKey hash.
         // Let's try to query /balance with the key provided.
-        
+
         // Actually, let's derive address if possible. 
         // But for Aetherium Nova v2, address generation logic is specific.
         // I will assume the UI passes the ADDRESS not just raw public key, or the backend can handle it.
         // If the UI passes a raw long public key, I need to convert it.
         // Let's look at `createWallet` logic below to see how address is made.
-        
+
         try {
             // Check if key is address-like
             let address = publicKey;
             if (!address.startsWith('0x')) {
-               // Try to derive.
-               // const key = ec.keyFromPublic(publicKey, 'hex');
-               // address = ...
-               // To be safe, I will just try sending it.
+                // Try to derive.
+                // const key = ec.keyFromPublic(publicKey, 'hex');
+                // address = ...
+                // To be safe, I will just try sending it.
             }
 
             const res = await fetch(`${API_URL}/balance/${address}`);
             if (!res.ok) return null;
             const data = await res.json();
-            
+
             return {
                 balance: data.balance,
                 stakes: [] // Staking info not yet exposed by simple balance endpoint
@@ -96,7 +96,7 @@ export class NodeService {
         const keyPair = ec.genKeyPair();
         const publicKey = keyPair.getPublic('hex');
         const secretKey = keyPair.getPrivate('hex');
-        
+
         // Derive address simply (mock for now or match backend logic).
         // Backend `wallet.ts` logic: 
         // const publicKey = key.getPublic('hex');
@@ -106,10 +106,10 @@ export class NodeService {
         // Backend `createWallet` returns { publicKey, address }. It generates random.
         // The Frontend usually wants to hold the private key.
         // So I will implement matching address generation here.
-        
+
         // sha256 of public key logic from backend?
         const hash = sha256(Buffer.from(publicKey, 'hex'));
-        const address = '0x' + hash.slice(0, 40); 
+        const address = '0x' + hash.slice(0, 40);
 
         return {
             publicKey, // This might actually be the address in strict types?
@@ -147,7 +147,7 @@ export class NodeService {
     // MOCK METHODS (Required to keep TS happy if interfaces rely on them, 
     // or we can remove if we clean up callsites)
     // =============================================================================
-    
+
     public _getMempool() { return []; }
     public _getBlocks() { return []; }
     public _getWallets() { return new Map(); }
