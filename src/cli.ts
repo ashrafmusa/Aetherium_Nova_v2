@@ -6,6 +6,7 @@ import { registerTransactionCommands } from "./commands/transaction.js";
 import { registerStakingCommands } from "./commands/staking.js";
 import { registerQueryCommands } from "./commands/query.js";
 import { registerMineCommand } from "./commands/mine.js";
+import { registerStealthTxCommands } from "./commands/stealth_tx.js";
 
 const program = new Command();
 
@@ -17,4 +18,5 @@ registerTransactionCommands(program);
 registerStakingCommands(program);
 registerQueryCommands(program);
 registerMineCommand(program);
+registerStealthTxCommands(program);
 program.parseAsync(process.argv);

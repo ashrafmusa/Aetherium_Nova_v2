@@ -1,7 +1,7 @@
 {
   "chainId": 2,
   "genesisBlockTimestamp": 1678886400000,
-  "bootstrapAddress": "0xd5ee6bc2c1afcbfaa68b3273caf9d4c17f4819e0",
+  "bootstrapAddress": "0x6c8184245408987f924d911ff2d2563e65d87b42",
   "bootstrapFunds": 1000000000000000,
   "bootstrapStake": 5000000,
   "minStake": 1000,

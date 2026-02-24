@@ -4,7 +4,7 @@ import { getLogger } from '../logger.js';
 import path from 'path';
 
 const logger = getLogger();
-const DB_PATH = path.resolve('data', 'chain-db');
+const DB_PATH = process.env.DB_PATH ?? path.resolve('data', 'chain-db');
 
 export class DatabaseService {
   private static instance: DatabaseService;

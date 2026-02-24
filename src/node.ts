@@ -17,6 +17,7 @@ import { createWallet, signTransaction, verifySignature } from './wallet.js';
 import { chooseNextBlockProposer, unjailValidator, getValidator, getAllValidators, type Validator, loadStakingLedgerFromDisk } from './staking.js';
 import { apiKeyAuth } from './auth.js';
 import { executeContract } from './vm.js';
+import { commitmentPool, COMMIT_DELAY_BLOCKS, computeCommitment } from './commitment_pool.js';
 
 const logger = getLogger();
 
@@ -72,10 +73,19 @@ setInterval(() => mempoolGauge.set(mempool.getPool().length), 5000);
     p2p.setMempool(mempool);
     p2p.listen(p2pPort);
 
-    // Connect to seed peers
+    // Connect to seed peers (from config)
     NETWORK_CONFIG.seedPeers.forEach((peer: string) => {
       if (peer.trim().length > 0) p2p.connectToPeer(peer);
     });
+
+    // Connect to extra peers supplied via INITIAL_PEERS env var (comma-separated)
+    const initialPeers = process.env.INITIAL_PEERS;
+    if (initialPeers) {
+      initialPeers.split(',').forEach((peer: string) => {
+        const trimmed = peer.trim();
+        if (trimmed.length > 0) p2p.connectToPeer(trimmed);
+      });
+    }
 
   } catch (err: any) {
     const error = err instanceof Error ? err.message : String(err);
@@ -259,10 +269,108 @@ app.post('/transaction', (req: Request, res: Response) => {
   }
 });
 
+// ── Encrypted Mempool: commit phase ──────────────────────────────────────────
+const commitSchema = z.object({
+  commitment: z.string().regex(/^[0-9a-f]{64}$/i, 'Must be a 64-char lowercase hex SHA3-256 hash'),
+  from: z.string().startsWith('0x').length(42),
+  fee: z.number().nonnegative(),
+});
+
+app.post('/mempool/commit', (req: Request, res: Response) => {
+  try {
+    const { commitment, from, fee } = commitSchema.parse(req.body);
+    const currentBlock = Math.max(0, getChainLength() - 1);
+    const result = commitmentPool.commit(commitment, from, fee, currentBlock);
+    if (!result.ok) {
+      return res.status(400).json({ error: result.message });
+    }
+    logger.info(`[API] Commitment ${commitment.slice(0, 12)}... accepted from ${from.slice(0, 10)}...`);
+    return res.status(202).json({
+      ok: true,
+      commitment,
+      revealAfterBlock: result.revealAfterBlock,
+      expiresAtBlock: result.expiresAtBlock,
+      message: `Commitment accepted. You may reveal after block ${result.revealAfterBlock}.`,
+    });
+  } catch (err: unknown) {
+    if (err instanceof ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: (err as ZodError).issues });
+    }
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── Encrypted Mempool: reveal phase ──────────────────────────────────────────
+const revealBodySchema = z.object({
+  transaction: z.record(z.unknown()),
+  secret: z.string().regex(/^[0-9a-f]{1,128}$/i, 'Secret must be a hex string'),
+});
+
+app.post('/mempool/reveal/:commitment', (req: Request, res: Response) => {
+  try {
+    const commitment = req.params.commitment ?? '';
+    if (!/^[0-9a-f]{64}$/i.test(commitment)) {
+      return res.status(400).json({ error: 'Invalid commitment format.' });
+    }
+    const entry = commitmentPool.getEntry(commitment);
+    if (!entry) return res.status(404).json({ error: 'Commitment not found.' });
+    if (entry.revealed) return res.status(400).json({ error: 'Commitment already revealed.' });
+
+    const currentBlock = Math.max(0, getChainLength() - 1);
+    if (currentBlock < entry.submittedBlock + COMMIT_DELAY_BLOCKS) {
+      return res.status(400).json({
+        error: `Too early to reveal. Current block: ${currentBlock}. Reveal allowed after block: ${entry.submittedBlock + COMMIT_DELAY_BLOCKS}.`,
+      });
+    }
+
+    const { transaction: rawTx, secret } = revealBodySchema.parse(req.body);
+    const txJson = JSON.stringify(rawTx);
+
+    if (!commitmentPool.verify(commitment, txJson, secret)) {
+      logger.warn(`[API] Reveal failed: commitment hash mismatch for ${commitment.slice(0, 12)}...`);
+      return res.status(400).json({ error: 'Commitment hash mismatch — invalid pre-image.' });
+    }
+
+    // Validate and add the revealed transaction to the regular mempool
+    const tx: Transaction = publicTransactionSchema.parse(rawTx);
+    const result = mempool.addToPool(tx);
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+
+    commitmentPool.markRevealed(commitment);
+    transactionsProcessed.inc();
+    mempoolGauge.set(mempool.getPool().length);
+    p2p.broadcastTransaction(tx);
+
+    const txId = getTransactionId(tx);
+    logger.info(`[API] Commitment ${commitment.slice(0, 12)}... revealed. TxID: ${txId.slice(0, 12)}...`);
+    return res.status(202).json({ ok: true, message: 'Transaction revealed and queued.', txId });
+  } catch (err: unknown) {
+    if (err instanceof ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: (err as ZodError).issues });
+    }
+    const error = err instanceof Error ? err.message : String(err);
+    logger.error(`[API] /mempool/reveal failed: ${error}`);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ── Encrypted Mempool: status ─────────────────────────────────────────────────
+app.get('/mempool/commits', (req: Request, res: Response) => {
+  res.json({
+    pending: commitmentPool.pendingCount(),
+    total: commitmentPool.totalCount(),
+  });
+});
+
 app.post('/proposeBlock', async (req: Request, res: Response) => {
   try {
     logger.info(`[API] Received a block proposal request with body: ${JSON.stringify(req.body, null, 2)}`);
     const block = blockReceiveSchema.parse(req.body);
+
+    // Prune stale commitments before processing the block
+    commitmentPool.pruneExpired(Math.max(0, getChainLength() - 1));
 
     const proposerValidator = getValidator(block.proposer);
     if (!proposerValidator || !proposerValidator.publicKey) {

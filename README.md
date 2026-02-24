@@ -19,7 +19,9 @@ Aetherium Nova is a fully operational blockchain network featuring a custom **Pr
 | Feature | Detail |
 |---|---|
 | **PoSU Consensus** | Hybrid Proof-of-Stake + Utility rewards — validators earn by both staking and contributing network utility |
-| **secp256k1 Cryptography** | Industry-standard elliptic curve signing, compatible with Bitcoin and Ethereum key formats |
+| **ML-DSA65 Signatures** | NIST FIPS 204 CRYSTALS-Dilithium — quantum-resistant transaction signing; secp256k1 cannot survive a sufficiently large quantum computer |
+| **ML-KEM-768 P2P Transport** | NIST FIPS 203 Kyber — every P2P WebSocket connection is encrypted with a post-quantum key-encapsulation handshake + AES-256-GCM |
+| **Encrypted Mempool (Anti-MEV)** | Commit-reveal scheme: senders publish a blinded hash first, reveal the full transaction only after a delay block — miners see nothing to front-run |
 | **Persistent LevelDB Ledger** | Full state snapshot and recovery — nodes can restart and resync without reprocessing the entire chain |
 | **Smart Contract VM** | Custom sandboxed virtual machine for deterministic on-chain computation |
 | **P2P Networking** | WebSocket-based peer discovery, block propagation, and mempool sync |
@@ -28,26 +30,70 @@ Aetherium Nova is a fully operational blockchain network featuring a custom **Pr
 
 ---
 
+## 🔐 Post-Quantum Stack
+
+Aetherium Nova is the **first blockchain with a complete end-to-end post-quantum cryptography stack** — both signatures and transport are quantum-resistant.
+
+| Layer | Algorithm | Standard | What it protects |
+|---|---|---|---|
+| **Transaction Signatures** | CRYSTALS-Dilithium ML-DSA65 | NIST FIPS 204 | Send/stake/contract authenticity |
+| **P2P Key Exchange** | Kyber ML-KEM-768 | NIST FIPS 203 | P2P channel establishment |
+| **P2P Message Encryption** | AES-256-GCM | — | Every P2P message in flight |
+| **Wallet Encryption** | AES-256-GCM + PBKDF2-SHA512 | — | Private keys at rest |
+
+**How the P2P handshake works:**
+1. When two nodes connect, the server generates a fresh ML-KEM-768 keypair and sends its public key (`KX_INIT`)
+2. The client encapsulates a shared secret with that public key (`KX_RESPONSE`) — attacker observing the wire cannot derive the secret without solving a lattice problem
+3. Both sides derive the same 256-bit AES key; all subsequent messages are AES-256-GCM encrypted
+4. The server's ML-KEM secret key is discarded immediately after handshake (forward secrecy)
+
+---
+
+## 🛡️ Encrypted Mempool (Anti-MEV)
+
+Traditional blockchains expose every pending transaction to validators who can insert or reorder their own transactions to profit (MEV / front-running). Aetherium Nova eliminates this at the protocol level with a **commit-reveal scheme**:
+
+1. **Commit phase** — sender submits `SHA3-256(txJson ‖ secret)` — a 64-char hash. Validators see only the commitment, not the transaction.
+2. **Delay** — commitment is locked for `COMMIT_DELAY_BLOCKS = 1` block. No one can reveal early.
+3. **Reveal phase** — sender submits the full transaction + secret. The node independently recomputes the hash; if it matches, the tx enters the mempool and is included in the next block.
+4. **Expiry** — unrevealed commitments are pruned after `COMMITMENT_TTL_BLOCKS = 50` blocks.
+
+```
+# Sequence diagram
+Sender                        Node
+  |-- POST /mempool/commit -->  |  (hash only, tx hidden)
+  |                             |  stores {hash, from, fee, revealAfterBlock}
+  |   [mine one block]          |
+  |-- POST /mempool/reveal -->  |  (full tx + secret)
+  |                             |  verify sha3(tx:secret) == hash  ✓
+  |                             |  add tx to mempool
+  |   [mine next block]         |
+  |<-- tx confirmed             |
+```
+
+---
+
 ## 🏗️ Architecture
 
 ```
 aetherium-nova-v2/
 ├── src/
-│   ├── node.ts          # Express HTTP server + REST API entry point
-│   ├── chain.ts         # Block structure, validation, and chain management
-│   ├── ledger.ts        # Global state: balances, nonces, contract storage
-│   ├── staking.ts       # PoSU validator registry, rewards, jailing
-│   ├── pool.ts          # Mempool — unconfirmed transaction queue
-│   ├── wallet.ts        # Key generation, signing, address derivation
-│   ├── vm.ts            # Smart contract execution sandbox
-│   ├── Transaction.ts   # Transaction types: TRANSFER, STAKE, UNSTAKE, CONTRACT
-│   ├── auth.ts          # API key authentication middleware
-│   ├── config.ts        # Network + genesis configuration
+│   ├── node.ts             # Express HTTP server + REST API entry point
+│   ├── chain.ts            # Block structure, validation, and chain management
+│   ├── ledger.ts           # Global state: balances, nonces, contract storage
+│   ├── staking.ts          # PoSU validator registry, rewards, jailing
+│   ├── pool.ts             # Mempool — unconfirmed transaction queue
+│   ├── commitment_pool.ts  # Encrypted mempool — commit-reveal anti-MEV engine
+│   ├── wallet.ts           # ML-DSA65 key generation, signing, address derivation
+│   ├── vm.ts               # Smart contract execution sandbox
+│   ├── Transaction.ts      # Transaction types: TRANSFER, STAKE, UNSTAKE, CONTRACT
+│   ├── auth.ts             # API key authentication middleware
+│   ├── config.ts           # Network + genesis configuration
 │   └── services/
-│       ├── p2p.ts       # WebSocket P2P peer management
-│       └── database.ts  # LevelDB persistence layer
+│       ├── p2p.ts          # ML-KEM-768 encrypted WebSocket P2P layer
+│       └── database.ts     # LevelDB persistence layer
 └── aetherium-nova-explorer/
-    └── ...              # React 18 + Vite + Tailwind web explorer
+    └── ...                 # React 18 + Vite + Tailwind web explorer
 ```
 
 ---
@@ -104,6 +150,9 @@ All endpoints require the `x-api-key` header.
 | POST | `/transaction` | Submit a signed transaction |
 | POST | `/mine` | Propose a new block |
 | GET | `/metrics` | Prometheus metrics |
+| POST | `/mempool/commit` | **[Anti-MEV]** Register a blinded commitment hash |
+| POST | `/mempool/reveal/:commitment` | **[Anti-MEV]** Reveal tx pre-image and add to mempool |
+| GET | `/mempool/commits` | List pending commitment count |
 
 ---
 
@@ -148,6 +197,17 @@ node dist/cli.js get-block <index>
 
 # Get full node status
 node dist/cli.js status
+
+# --- Anti-MEV: Encrypted Mempool ---
+
+# Step 1: Commit a blinded transfer (mempool sees only a hash — not the tx)
+WALLET_PASSWORD="..." node dist/cli.js commit-tx <from> <to> <amount> <fee>
+# Output: commitment ID + "reveal after block N"
+# Pre-image saved to .aetherium-commits/<id>.json
+
+# Step 2: After the delay block is mined, reveal the transaction
+node dist/cli.js reveal-tx <commitment-id>
+# Node verifies sha3-256(txJson:secret) == commitment, then adds tx to mempool
 ```
 
 ---
@@ -247,7 +307,10 @@ $ node dist/cli.js get-nonce 0x5449c1c0d82b61d2f1ba2958529dc92d5260a214
 
 - **Runtime**: Node.js 22, TypeScript
 - **Consensus**: Custom PoSU (Proof-of-Stake & Utility)
-- **Crypto**: secp256k1 (elliptic), AES-256-GCM wallet encryption (PBKDF2-SHA512)
+- **Signatures**: ML-DSA65 / CRYSTALS-Dilithium (NIST FIPS 204) — post-quantum
+- **P2P Transport**: ML-KEM-768 / Kyber (NIST FIPS 203) + AES-256-GCM — post-quantum
+- **Anti-MEV**: SHA3-256 commit-reveal encrypted mempool
+- **Wallet Encryption**: AES-256-GCM + PBKDF2-SHA512
 - **Storage**: LevelDB
 - **API**: Express, Helmet, express-rate-limit, Prometheus
 - **P2P**: WebSockets (ws)

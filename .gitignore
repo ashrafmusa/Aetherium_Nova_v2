@@ -42,3 +42,6 @@ Thumbs.db
 __pycache__/
 *.pyc
 *.pyo
+
+# Encrypted mempool pre-image cache (local only)
+.aetherium-commits/

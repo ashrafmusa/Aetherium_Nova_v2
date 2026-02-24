@@ -133,3 +133,33 @@ export async function getMempoolTransactions(): Promise<any[] | null> {
     return null;
   }
 }
+
+// ── Encrypted Mempool: commit / reveal ────────────────────────────────────────
+
+export async function commitTransaction(
+  commitment: string,
+  from: string,
+  fee: number,
+): Promise<{ ok: boolean; commitment: string; revealAfterBlock: number; expiresAtBlock: number; message: string } | null> {
+  try {
+    const res = await api.post('/mempool/commit', { commitment, from, fee });
+    return res.data;
+  } catch (error) {
+    logApiError("Error submitting commitment", error);
+    return null;
+  }
+}
+
+export async function revealTransaction(
+  commitment: string,
+  transaction: object,
+  secret: string,
+): Promise<{ ok: boolean; txId: string; message: string } | null> {
+  try {
+    const res = await api.post(`/mempool/reveal/${commitment}`, { transaction, secret });
+    return res.data;
+  } catch (error) {
+    logApiError("Error revealing transaction", error);
+    return null;
+  }
+}
