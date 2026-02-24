@@ -21,7 +21,7 @@ export interface Transaction {
   amount: number;
   timestamp: number;
   type: 'TRANSFER' | 'STAKE' | 'REWARD';
-  signature: string; 
+  signature: string;
 }
 
 export type UnsignedTransaction = Omit<Transaction, 'hash' | 'signature'>;
@@ -51,12 +51,39 @@ export interface Wallet {
 }
 
 export interface Validator {
-    publicKey: string;
-    secretKey: string;
-    name: string;
-    totalStake: number;
-    apr: number;
-    icon: ReactNode;
+  /** On-chain address — used as the primary lookup key */
+  publicKey: string;
+  secretKey?: string;
+  name: string;
+  totalStake: number;
+  apr: number;
+  icon?: ReactNode;
+  jailed?: boolean;
+  slashCount?: number;
+  delegatorCount?: number;
+  lastProposedBlock?: number | null;
+}
+
+export type SearchResultType = 'block' | 'address' | 'transaction';
+
+export interface SearchResult {
+  type: SearchResultType;
+  data: {
+    // block
+    index?: number;
+    hash?: string;
+    timestamp?: number;
+    transactions?: Transaction[];
+    previousHash?: string;
+    // address
+    address?: string;
+    balance?: number;
+    nonce?: number;
+    // transaction
+    tx?: Transaction;
+    blockIndex?: number | null;
+    confirmed?: boolean;
+  };
 }
 
 export interface CliOutput {
@@ -66,10 +93,10 @@ export interface CliOutput {
 
 // Type for data fetched from the "Node API"
 export interface NetworkState {
-    stats: NetworkStatsData;
-    blocks: Block[];
-    mempool: Transaction[];
-    validators: Omit<Validator, 'secretKey'>[];
+  stats: NetworkStatsData;
+  blocks: Block[];
+  mempool: Transaction[];
+  validators: Omit<Validator, 'secretKey'>[];
 }
 export interface WalletState {
   balance: number;

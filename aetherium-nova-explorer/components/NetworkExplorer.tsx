@@ -1,5 +1,11 @@
 import React, { useState, useCallback } from "react";
-import type { Block, Transaction, NetworkStatsData } from "../types";
+import type {
+  Block,
+  Transaction,
+  NetworkStatsData,
+  SearchResult,
+} from "../types";
+import { nodeService } from "../services/nodeService";
 
 interface NetworkExplorerProps {
   stats: NetworkStatsData;
@@ -382,7 +388,131 @@ const SectionCard: React.FC<{
     <div>{children}</div>
   </div>
 );
+// ─── Search Result Panel \u2500────────────────────────────────────────────────────────
 
+const SearchResultPanel: React.FC<{
+  result: SearchResult;
+  onClose: () => void;
+}> = ({ result, onClose }) => {
+  const { copy, copied } = useCopy();
+  const d = result.data;
+
+  const Row = ({ label, value }: { label: string; value: string }) => (
+    <div className="bg-slate-800/60 rounded-xl p-3">
+      <p className="text-xs text-slate-500 mb-1">{label}</p>
+      <div className="flex items-center gap-1">
+        <p className="text-xs font-mono text-slate-300 break-all">{value}</p>
+        <CopyBtn text={value} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="mb-6 bg-slate-900/80 border border-cyan-500/30 rounded-2xl overflow-hidden animate-fade-in">
+      <div className="flex items-center justify-between px-4 py-3 bg-cyan-500/10 border-b border-cyan-500/20">
+        <div className="flex items-center gap-2">
+          <span className="text-cyan-400">◈</span>
+          <span className="text-sm font-semibold text-cyan-300">
+            {result.type === "block"
+              ? `Block #${d.index}`
+              : result.type === "address"
+                ? "Address"
+                : result.type === "transaction"
+                  ? d.confirmed
+                    ? "Transaction (confirmed)"
+                    : "Transaction (pending)"
+                  : "Search Result"}
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-slate-500 hover:text-white transition-colors"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      </div>
+      <div className="p-4 space-y-3">
+        {result.type === "address" && (
+          <>
+            <Row label="Address" value={d.address!} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-800/60 rounded-xl p-3">
+                <p className="text-xs text-slate-500 mb-1">Balance</p>
+                <p className="text-xl font-black text-white">
+                  {(d.balance ?? 0).toLocaleString(undefined, {
+                    maximumFractionDigits: 4,
+                  })}{" "}
+                  <span className="text-cyan-400 text-sm">AN</span>
+                </p>
+              </div>
+              <div className="bg-slate-800/60 rounded-xl p-3">
+                <p className="text-xs text-slate-500 mb-1">Nonce</p>
+                <p className="text-xl font-black text-white">{d.nonce ?? 0}</p>
+              </div>
+            </div>
+          </>
+        )}
+        {result.type === "block" && (
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-slate-800/60 rounded-xl p-3">
+                <p className="text-xs text-slate-500 mb-1">Height</p>
+                <p className="text-lg font-black text-white">#{d.index}</p>
+              </div>
+              <div className="bg-slate-800/60 rounded-xl p-3">
+                <p className="text-xs text-slate-500 mb-1">Txns</p>
+                <p className="text-lg font-black text-white">
+                  {(d.transactions ?? []).length}
+                </p>
+              </div>
+              <div className="bg-slate-800/60 rounded-xl p-3">
+                <p className="text-xs text-slate-500 mb-1">Time</p>
+                <p className="text-xs text-slate-300">
+                  {d.timestamp ? new Date(d.timestamp).toLocaleString() : "—"}
+                </p>
+              </div>
+            </div>
+            {d.hash && <Row label="Hash" value={d.hash} />}
+          </>
+        )}
+        {result.type === "transaction" && d.tx && (
+          <>
+            <Row label="Hash" value={d.tx.hash} />
+            <Row label="From" value={d.tx.from} />
+            <Row label="To" value={d.tx.to} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-800/60 rounded-xl p-3">
+                <p className="text-xs text-slate-500 mb-1">Amount</p>
+                <p className="text-xl font-black text-white">
+                  {formatAmount(d.tx.amount)}{" "}
+                  <span className="text-cyan-400 text-sm">AN</span>
+                </p>
+              </div>
+              <div className="bg-slate-800/60 rounded-xl p-3">
+                <p className="text-xs text-slate-500 mb-1">Block</p>
+                <p className="text-lg font-black text-white">
+                  {d.blockIndex != null ? `#${d.blockIndex}` : "Pending"}
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export const NetworkExplorer: React.FC<NetworkExplorerProps> = ({
@@ -397,6 +527,30 @@ export const NetworkExplorer: React.FC<NetworkExplorerProps> = ({
   const [search, setSearch] = useState("");
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
+  const [apiSearchResult, setApiSearchResult] = useState<SearchResult | null>(
+    null,
+  );
+  const [apiSearching, setApiSearching] = useState(false);
+
+  const isExactQuery = (q: string) =>
+    /^0x[0-9a-fA-F]{40}$/.test(q) ||
+    /^[0-9a-fA-F]{64}$/.test(q) ||
+    /^\d+$/.test(q.trim());
+
+  const handleSearchSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!search.trim()) {
+        setApiSearchResult(null);
+        return;
+      }
+      setApiSearching(true);
+      const result = await nodeService.search(search.trim());
+      setApiSearchResult(result);
+      setApiSearching(false);
+    },
+    [search],
+  );
 
   const filterTypes: Array<{ id: "ALL" | Transaction["type"]; label: string }> =
     [
@@ -444,49 +598,82 @@ export const NetworkExplorer: React.FC<NetworkExplorerProps> = ({
         </div>
 
         {/* Search */}
-        <div className="relative w-full sm:w-80">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by hash or address…"
-            className="input-cyber w-full bg-slate-800/80 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 transition-all"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+        <form
+          onSubmit={handleSearchSubmit}
+          className="relative w-full sm:w-80 flex gap-2"
+        >
+          <div className="relative flex-1">
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                if (!e.target.value) setApiSearchResult(null);
+              }}
+              placeholder="Hash, address, or block #…"
+              className="input-cyber w-full bg-slate-800/80 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 transition-all"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  setApiSearchResult(null);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+          {isExactQuery(search) && (
+            <button
+              type="submit"
+              disabled={apiSearching}
+              className="flex-shrink-0 px-3 py-2.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+            >
+              {apiSearching ? (
+                <span className="animate-spin inline-block w-4 h-4 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full" />
+              ) : (
+                "◈"
+              )}
             </button>
           )}
-        </div>
+        </form>
       </div>
+
+      {/* API search result */}
+      {apiSearchResult && (
+        <SearchResultPanel
+          result={apiSearchResult}
+          onClose={() => setApiSearchResult(null)}
+        />
+      )}
 
       {/* Filter pills */}
       <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1">

@@ -114,7 +114,14 @@ const App: React.FC = () => {
       setMempool(state.mempool);
       setBlocks(state.blocks);
       setValidators(state.validators);
-      // confirmedTransactions can be derived from blocks when needed
+      // Flatten confirmed transactions from all blocks (most recent first)
+      const allTxs: Transaction[] = state.blocks.flatMap((b: Block) =>
+        (b.transactions ?? []).map((tx: Transaction) => ({
+          ...tx,
+          timestamp: tx.timestamp ?? b.timestamp,
+        })),
+      );
+      setConfirmedTransactions(allTxs);
       setSyncError(null);
     } catch (error) {
       console.error("Error syncing with node:", error);
@@ -294,6 +301,23 @@ const App: React.FC = () => {
       }
     }
     alert(result.message);
+  };
+
+  const handleFaucet = async (): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    if (!wallet?.publicKey)
+      return { success: false, message: "No wallet loaded." };
+    const result = await nodeService.claimFaucet(wallet.publicKey);
+    if (result.success) {
+      // Refresh balance immediately
+      const walletState = await nodeService.getWalletState(wallet.publicKey);
+      if (walletState) {
+        setWallet((w) => (w ? { ...w, balance: walletState.balance } : null));
+      }
+    }
+    return result;
   };
 
   const handleCliCommand = async (command: string) => {
@@ -623,6 +647,7 @@ const App: React.FC = () => {
             onSend={handleSend}
             mempool={mempool}
             setWallet={setWallet}
+            onFaucet={handleFaucet}
           />
         )}
         {page === "staking" && (

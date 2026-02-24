@@ -67,6 +67,7 @@ interface WalletPageProps {
   ) => Promise<{ success: boolean; message: string }>;
   mempool: Transaction[];
   setWallet?: (w: Wallet) => void;
+  onFaucet?: () => Promise<{ success: boolean; message: string }>;
 }
 
 // ─── Clipboard hook ───────────────────────────────────────────────────────────
@@ -267,6 +268,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   onSend,
   mempool,
   setWallet,
+  onFaucet,
 }) => {
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
@@ -274,7 +276,22 @@ export const WalletPage: React.FC<WalletPageProps> = ({
     null,
   );
   const [sending, setSending] = useState(false);
+  const [faucetMsg, setFaucetMsg] = useState<{
+    text: string;
+    ok: boolean;
+  } | null>(null);
+  const [faucetLoading, setFaucetLoading] = useState(false);
   const { copy, copied } = useCopy();
+
+  const handleFaucetClick = async () => {
+    if (!onFaucet) return;
+    setFaucetLoading(true);
+    setFaucetMsg(null);
+    const result = await onFaucet();
+    setFaucetMsg({ text: result.message, ok: result.success });
+    setFaucetLoading(false);
+    setTimeout(() => setFaucetMsg(null), 5000);
+  };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -414,6 +431,33 @@ export const WalletPage: React.FC<WalletPageProps> = ({
             >
               <span>◉</span> Go to Staking
             </button>
+            {onFaucet && (
+              <div className="mt-3">
+                <button
+                  onClick={handleFaucetClick}
+                  disabled={faucetLoading}
+                  className="btn-cyber w-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-300 font-semibold py-2.5 px-4 rounded-xl transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {faucetLoading ? (
+                    <>
+                      <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full" />{" "}
+                      Claiming…
+                    </>
+                  ) : (
+                    <>
+                      <span>✕</span> Get 100 Test AN
+                    </>
+                  )}
+                </button>
+                {faucetMsg && (
+                  <p
+                    className={`mt-2 text-xs text-center px-2 ${faucetMsg.ok ? "text-emerald-400" : "text-red-400"}`}
+                  >
+                    {faucetMsg.text}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Send card */}

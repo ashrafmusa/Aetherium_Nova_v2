@@ -8,13 +8,13 @@ import helmet from 'helmet';
 import { z, ZodError, ZodIssue } from 'zod';
 import { type Transaction, getTransactionId, TxType } from './Transaction.js';
 import { getBlockchain, getChainLength, proposeBlock, calculateBlockHash, replaceChain, type Block, getLatestBlock } from './chain.js';
-import { getBalance, getNonceForAddress, getContractCode, getContractStorage, saveLedgerToDisk, loadLedgerFromDisk } from './ledger.js';
+import { getBalance, setBalance, getNonceForAddress, getContractCode, getContractStorage, saveLedgerToDisk, loadLedgerFromDisk } from './ledger.js';
 import { Mempool } from './pool.js';
 import { p2p } from './services/p2p.js';
 import { NETWORK_CONFIG, GENESIS_CONFIG } from './config.js';
 import { getLogger } from './logger.js';
 import { createWallet, signTransaction, verifySignature } from './wallet.js';
-import { chooseNextBlockProposer, unjailValidator, getValidator, type Validator, loadStakingLedgerFromDisk } from './staking.js';
+import { chooseNextBlockProposer, unjailValidator, getValidator, getAllValidators, type Validator, loadStakingLedgerFromDisk } from './staking.js';
 import { apiKeyAuth } from './auth.js';
 import { executeContract } from './vm.js';
 
@@ -169,15 +169,36 @@ app.get('/metrics', async (req: Request, res: Response) => {
 });
 
 app.get('/status', (req: Request, res: Response) => {
+  const chain = getBlockchain();
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  let txCount = 0;
+  let earliest = now;
+  for (let i = chain.length - 1; i >= 0; i--) {
+    if (chain[i].timestamp < now - windowMs) break;
+    txCount += chain[i].data.length;
+    earliest = chain[i].timestamp;
+  }
+  const elapsed = Math.max(1, (now - earliest) / 1000);
+  const tps = txCount > 0 ? Math.round((txCount / elapsed) * 100) / 100 : 0;
   res.json({
     height: getChainLength(),
     peers: p2p.getPeers().length,
-    mempool: mempool.getPool().length
+    mempool: mempool.getPool().length,
+    tps,
   });
 });
 
 app.get('/chain', (req: Request, res: Response) => {
-  res.json({ version: "2.0", chain: getBlockchain() });
+  const chain = getBlockchain();
+  if (req.query.page !== undefined || req.query.limit !== undefined) {
+    const page = Math.max(0, parseInt(req.query.page as string) || 0);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const reversed = [...chain].reverse();
+    const slice = reversed.slice(page * limit, page * limit + limit);
+    return res.json({ version: '2.0', chain: slice, total: chain.length, page, limit, pages: Math.ceil(chain.length / limit) });
+  }
+  res.json({ version: "2.0", chain });
 });
 
 app.get('/latestBlock', (req: Request, res: Response) => {
@@ -434,6 +455,73 @@ app.post('/unjail', async (req: Request, res: Response) => {
     logger.error(`[API] /unjail failed: ${error}`);
     res.status(500).json({ error: "Internal server error." });
   }
+});
+
+// ─── Validators ──────────────────────────────────────────────────────────────
+app.get('/validators', (req: Request, res: Response) => {
+  const vs = getAllValidators();
+  const result = Array.from(vs.values()).map(v => ({
+    address: v.address,
+    publicKey: v.publicKey,
+    totalStake: v.totalStake,
+    jailed: v.jailed,
+    slashCount: v.slashCount ?? 0,
+    delegatorCount: v.delegators.size,
+    lastProposedBlock: v.lastProposedBlock ?? null,
+  }));
+  res.json({ validators: result });
+});
+
+// ─── Universal search ─────────────────────────────────────────────────────────
+app.get('/search', (req: Request, res: Response) => {
+  const q = ((req.query.q as string) || '').trim();
+  if (!q) return res.status(400).json({ error: 'Query required' });
+
+  // Block height
+  const height = parseInt(q);
+  if (!isNaN(height) && String(height) === q && height >= 0 && height < getChainLength()) {
+    return res.json({ type: 'block', data: getBlockchain()[height] });
+  }
+
+  // Ethereum-style address
+  if (/^0x[0-9a-fA-F]{40}$/.test(q)) {
+    return res.json({ type: 'address', data: { address: q, balance: getBalance(q), nonce: getNonceForAddress(q) } });
+  }
+
+  // TX hash (64 hex chars)
+  if (/^[0-9a-fA-F]{64}$/.test(q)) {
+    const chain = getBlockchain();
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const tx = chain[i].data.find(t => t.hash === q);
+      if (tx) return res.json({ type: 'transaction', data: { tx, blockIndex: chain[i].index, confirmed: true } });
+    }
+    const pending = mempool.getPool().find(t => t.hash === q);
+    if (pending) return res.json({ type: 'transaction', data: { tx: pending, blockIndex: null, confirmed: false } });
+  }
+
+  res.status(404).json({ error: 'Not found', query: q });
+});
+
+// ─── Testnet faucet ───────────────────────────────────────────────────────────
+const faucetCooldowns = new Map<string, number>();
+const FAUCET_AMOUNT = 100;
+const FAUCET_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+app.post('/faucet', async (req: Request, res: Response) => {
+  const { address } = req.body || {};
+  if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    return res.status(400).json({ error: 'Valid 0x address required' });
+  }
+  const last = faucetCooldowns.get(address);
+  if (last && Date.now() - last < FAUCET_COOLDOWN_MS) {
+    const remainHours = Math.ceil((FAUCET_COOLDOWN_MS - (Date.now() - last)) / 3_600_000);
+    return res.status(429).json({ error: `Cooldown active. Try again in ${remainHours}h.` });
+  }
+  setBalance(address, getBalance(address) + FAUCET_AMOUNT);
+  faucetCooldowns.set(address, Date.now());
+  await saveLedgerToDisk();
+  logger.info(`[Faucet] Sent ${FAUCET_AMOUNT} AN to ${address}`);
+  res.json({ success: true, message: `${FAUCET_AMOUNT} AN sent to ${address}`, newBalance: getBalance(address) });
 });
 
 app.get('/peers', (req: Request, res: Response) => {

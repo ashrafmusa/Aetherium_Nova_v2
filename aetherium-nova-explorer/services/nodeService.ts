@@ -1,6 +1,6 @@
 
 import { sha256 } from 'js-sha256';
-import type { Transaction, Block, Wallet, Validator, NetworkState, WalletState } from '../types.js';
+import type { Transaction, Block, Wallet, Validator, NetworkState, WalletState, SearchResult } from '../types.js';
 import { ec as EC } from 'elliptic';
 
 const ec = new EC('secp256k1');
@@ -36,10 +36,11 @@ export class NodeService {
 
     public async getNetworkState(): Promise<NetworkState> {
         try {
-            const [statusRes, chainRes, mempoolRes] = await Promise.all([
+            const [statusRes, chainRes, mempoolRes, validatorsRes] = await Promise.all([
                 fetch(`${API_URL}/status`, { headers: authHeaders }),
                 fetch(`${API_URL}/chain`, { headers: authHeaders }),
-                fetch(`${API_URL}/mempool`, { headers: authHeaders })
+                fetch(`${API_URL}/mempool`, { headers: authHeaders }),
+                fetch(`${API_URL}/validators`, { headers: authHeaders }),
             ]);
 
             if (!statusRes.ok || !chainRes.ok || !mempoolRes.ok) {
@@ -49,24 +50,52 @@ export class NodeService {
             const status = await statusRes.json();
             const chain = await chainRes.json();
             const pool = await mempoolRes.json();
+            const validatorsData = validatorsRes.ok ? await validatorsRes.json() : { validators: [] };
 
-            // The backend returns { version: "2.0", chain: [...] }
-            const blocks: Block[] = [...chain.chain].reverse();
+            // Map backend block shape → frontend Block shape
+            const mapBlock = (b: any): Block => ({
+                index: b.index,
+                timestamp: b.timestamp,
+                transactions: (b.data ?? b.transactions ?? []).map((tx: any) => ({
+                    hash: tx.hash,
+                    from: tx.from,
+                    to: tx.to,
+                    amount: tx.amount ?? 0,
+                    fee: tx.fee ?? 0,
+                    nonce: tx.nonce ?? 0,
+                    timestamp: tx.timestamp ?? b.timestamp,
+                    type: tx.type as Transaction['type'],
+                    signature: tx.signature ?? '',
+                })),
+                hash: b.hash,
+                previousHash: b.previousHash,
+                merkleRoot: b.merkleRoot ?? '',
+                validator: b.proposer ?? b.validator ?? '',
+                validatorSignature: b.signature ?? b.validatorSignature ?? '',
+            });
+            const blocks: Block[] = [...chain.chain].map(mapBlock).reverse();
 
-            // Backend doesn't expose validator detailed list easily yet, so we mock or fetch if available.
-            // For now, we'll return an empty list or minimal info.
-            const validators: any[] = [];
+            const validators: Omit<Validator, 'secretKey'>[] = (validatorsData.validators ?? []).map((v: any) => ({
+                publicKey: v.address,       // use address as the UI lookup key
+                name: `${v.address.slice(0, 8)}…`,
+                totalStake: v.totalStake,
+                apr: 8.5,             // TODO: derive from rewards data
+                jailed: v.jailed,
+                slashCount: v.slashCount,
+                delegatorCount: v.delegatorCount,
+                lastProposedBlock: v.lastProposedBlock,
+            }));
 
             return {
                 stats: {
                     blockHeight: status.height,
-                    tps: 0, // TODO: Calculate from recent blocks
-                    activeNodes: status.peers + 1, // Peers + Self
-                    marketCap: 0, // Placeholder
+                    tps: status.tps ?? 0,
+                    activeNodes: status.peers + 1,
+                    marketCap: 0,
                 },
                 mempool: pool.pool || [],
-                blocks: blocks,
-                validators: validators,
+                blocks,
+                validators,
             };
         } catch (err) {
             console.error("Failed to fetch network state", err);
@@ -136,6 +165,34 @@ export class NodeService {
 
     public async claimRewards(publicKey: string): Promise<{ success: boolean; message: string }> {
         return { success: false, message: "Claim rewards not implemented on mainnet yet." };
+    }
+
+    /** Universal search — resolves to block, address, or transaction */
+    public async search(q: string): Promise<SearchResult | null> {
+        try {
+            const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(q)}`, { headers: authHeaders });
+            if (res.status === 404) return null;
+            if (!res.ok) throw new Error(`Search failed: ${res.status}`);
+            return await res.json() as SearchResult;
+        } catch (err) {
+            console.error('Search error', err);
+            return null;
+        }
+    }
+
+    /** Testnet faucet — claims 100 AN to the given address (24h cooldown) */
+    public async claimFaucet(address: string): Promise<{ success: boolean; message: string }> {
+        try {
+            const res = await fetch(`${API_URL}/faucet`, {
+                method: 'POST',
+                headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address }),
+            });
+            const data = await res.json();
+            return { success: res.ok, message: data.message || data.error };
+        } catch (err: any) {
+            return { success: false, message: err.message };
+        }
     }
 
 
