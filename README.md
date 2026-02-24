@@ -10,7 +10,7 @@
 
 Aetherium Nova is a fully operational blockchain network featuring a custom **Proof-of-Stake & Utility (PoSU)** consensus mechanism, a persistent ledger, a smart contract virtual machine, a P2P networking layer, and a production-grade web explorer — all built from the ground up in TypeScript.
 
-> 🌐 [Explorer](https://ashrafmusa.github.io/Aetherium_Nova_v2) | 📄 Whitepaper | 💬 Discord | 🐦 Twitter
+> 🌐 [Explorer](https://ashrafmusa.github.io/Aetherium_Nova_v2) | 📄 Whitepaper | 💬 Discord | 🐦 Twitter | ☁️ [Deploy on Oracle Cloud Free Tier →](deploy/ORACLE_CLOUD_SETUP.md)
 
 ---
 
