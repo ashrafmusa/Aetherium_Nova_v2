@@ -1,10 +1,32 @@
 
+import https from 'node:https';
+import fs from 'node:fs';
 import { WebSocket, WebSocketServer } from 'ws';
 import { getLogger } from '../logger.js';
 import { getBlockchain, getLatestBlock, replaceChain, appendBlock, Block } from '../chain.js';
 import { Transaction, getTransactionId } from '../Transaction.js';
 import { Mempool } from '../pool.js';
 import { NETWORK_CONFIG } from '../config.js';
+
+/**
+ * Load TLS credentials from env-var file paths, if both are set.
+ * Set P2P_TLS_CERT and P2P_TLS_KEY to the paths of your PEM-encoded cert
+ * and private key respectively to enable encrypted wss:// connections.
+ */
+function loadTlsCredentials(): { cert: Buffer; key: Buffer } | null {
+  const certPath = process.env.P2P_TLS_CERT;
+  const keyPath = process.env.P2P_TLS_KEY;
+  if (!certPath || !keyPath) return null;
+  try {
+    const cert = fs.readFileSync(certPath);
+    const key = fs.readFileSync(keyPath);
+    return { cert, key };
+  } catch (err: any) {
+    const logger = getLogger();
+    logger.error(`[P2P] Failed to load TLS credentials: ${err.message}. Falling back to plaintext ws://.`);
+    return null;
+  }
+}
 
 const logger = getLogger();
 
@@ -67,8 +89,21 @@ export class P2PService {
   }
 
   public listen(port: number) {
-    this.server = new WebSocketServer({ port });
-    logger.info(`[P2P] Listening for P2P connections on port ${port}`);
+    const tls = loadTlsCredentials();
+
+    if (tls) {
+      // ── Encrypted mode (wss://) ──────────────────────────────────────────
+      const httpsServer = https.createServer({ cert: tls.cert, key: tls.key });
+      this.server = new WebSocketServer({ server: httpsServer });
+      httpsServer.listen(port, () => {
+        logger.info(`[P2P] Listening for encrypted P2P connections (wss://) on port ${port}`);
+      });
+    } else {
+      // ── Plaintext mode (ws://) ──────────────────────────────────────────
+      logger.warn('[P2P] TLS not configured (P2P_TLS_CERT / P2P_TLS_KEY not set). Using unencrypted ws://. Set these env vars for production.');
+      this.server = new WebSocketServer({ port });
+      logger.info(`[P2P] Listening for P2P connections (ws://) on port ${port}`);
+    }
 
     this.server.on('connection', (ws: WebSocket, req) => {
       const ip = req.socket.remoteAddress;

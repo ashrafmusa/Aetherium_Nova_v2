@@ -1,0 +1,66 @@
+# docker-compose.yml – Aetherium Nova validator node
+#
+# Quick start:
+#   cp .env.example .env          # fill in API_KEY (at minimum)
+#   docker compose up -d
+#
+# To run two nodes locally (peer simulation):
+#   docker compose --profile peers up -d
+
+services:
+  aetherium-node:
+    build: .
+    image: aetherium-nova/node:latest
+    container_name: aetherium-nova-node
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-3001}:3001"
+      - "${P2P_PORT:-6001}:6001"
+    environment:
+      - API_KEY=${API_KEY:?err_API_KEY_required}
+      - MINER_ADDRESS=${MINER_ADDRESS:-}
+      - PEERS=${PEERS:-}
+      # TLS (optional) — mount your cert/key files and set these paths
+      - P2P_TLS_CERT=${P2P_TLS_CERT:-}
+      - P2P_TLS_KEY=${P2P_TLS_KEY:-}
+    volumes:
+      - aetherium-chain:/app/data
+      - aetherium-wallets:/app/wallets
+      - aetherium-logs:/app/logs
+      # Optionally mount TLS certs: - ./certs:/app/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --header='x-api-key:${API_KEY}' http://localhost:3001/status || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── Optional second node for local peer testing (--profile peers) ──────────
+  aetherium-node-2:
+    build: .
+    image: aetherium-nova/node:latest
+    container_name: aetherium-nova-node-2
+    profiles: ["peers"]
+    restart: unless-stopped
+    ports:
+      - "3002:3001"
+      - "6002:6001"
+    environment:
+      - API_KEY=${API_KEY}
+      - MINER_ADDRESS=${MINER_ADDRESS:-}
+      - PEERS=ws://aetherium-node:6001
+    volumes:
+      - aetherium-chain-2:/app/data
+      - aetherium-wallets-2:/app/wallets
+      - aetherium-logs-2:/app/logs
+    depends_on:
+      aetherium-node:
+        condition: service_healthy
+
+volumes:
+  aetherium-chain:
+  aetherium-wallets:
+  aetherium-logs:
+  aetherium-chain-2:
+  aetherium-wallets-2:
+  aetherium-logs-2:

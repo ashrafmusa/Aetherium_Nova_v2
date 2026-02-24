@@ -1,4 +1,5 @@
 {
+  "chainId": 2,
   "genesisBlockTimestamp": 1678886400000,
   "bootstrapAddress": "0xd5ee6bc2c1afcbfaa68b3273caf9d4c17f4819e0",
   "bootstrapFunds": 1000000000000000,

@@ -14,6 +14,7 @@ export interface GasCosts {
 }
 
 export interface GenesisConfig {
+    chainId: number;
     vmMemoryLimitMB: number;
     vmExecutionTimeoutMs: number;
     gasPriceUnit: number;
@@ -62,6 +63,7 @@ function loadGenesisConfig(): GenesisConfig {
     }
 
     const config: GenesisConfig = {
+        chainId: rawConfig.chainId ?? 2,
         vmMemoryLimitMB: rawConfig.vmMemoryLimitMB ?? 128,
         vmExecutionTimeoutMs: rawConfig.vmExecutionTimeoutMs ?? 500,
         gasPriceUnit: rawConfig.gasPriceUnit ?? 100,

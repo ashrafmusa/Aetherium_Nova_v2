@@ -10,4 +10,6 @@ export interface Block {
     proposerPublicKey: string;
     signature: string;
     shardId?: number;
+    /** Chain ID — prevents replay attacks between testnet and mainnet */
+    chainId?: number;
 }

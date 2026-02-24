@@ -32,14 +32,15 @@ const logger = getLogger();
 let chain: Block[] = [];
 
 export function calculateBlockHash(block: Omit<Block, 'hash' | 'signature'>): string {
-  const { index, previousHash, timestamp, data, proposer, proposerPublicKey, shardId } = block;
+  const { index, previousHash, timestamp, data, proposer, proposerPublicKey, shardId, chainId } = block;
   const txString = JSON.stringify(
     [...data].sort((a, b) => {
       if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
       return getTransactionId(a).localeCompare(getTransactionId(b));
     })
   );
-  const raw = `${index}${previousHash}${timestamp}${proposer}${proposerPublicKey}${txString}${shardId ?? 0}`;
+  // chainId is included in the hash to prevent cross-network replay attacks
+  const raw = `${chainId ?? GENESIS_CONFIG.chainId}:${index}:${previousHash}:${timestamp}:${proposer}:${proposerPublicKey}:${txString}:${shardId ?? 0}`;
   return crypto.createHash("sha256").update(raw).digest("hex");
 }
 
@@ -76,8 +77,9 @@ function createGenesisBlock(): Block {
   const proposerPublicKey = "";
   const signature = "0".repeat(128);
   const shardId = 0;
-  const hash = calculateBlockHash({ index, previousHash, timestamp, data, proposer, proposerPublicKey, shardId });
-  return { index, previousHash, timestamp, data, proposer, proposerPublicKey, hash, signature, shardId };
+  const chainId = GENESIS_CONFIG.chainId;
+  const hash = calculateBlockHash({ index, previousHash, timestamp, data, proposer, proposerPublicKey, shardId, chainId });
+  return { index, previousHash, timestamp, data, proposer, proposerPublicKey, hash, signature, shardId, chainId };
 }
 
 (async () => {
@@ -186,6 +188,7 @@ export async function proposeBlock(
     proposer: proposerAddress,
     proposerPublicKey: proposerPublicKey,
     shardId: lastBlock.shardId,
+    chainId: GENESIS_CONFIG.chainId,
   };
 
   const hash = calculateBlockHash(blockData);

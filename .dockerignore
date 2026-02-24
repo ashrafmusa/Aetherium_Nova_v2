@@ -1,0 +1,36 @@
+# Node dependencies
+node_modules
+aetherium-nova-explorer/node_modules
+explorer/node_modules
+
+# Build output
+dist
+
+# Chain data & wallets (mounted as volumes)
+data
+wallets
+logs
+
+# Test artefacts
+coverage
+*.log
+debug_log.txt
+hash_debug.txt
+miner_hash.txt
+miner_data.json
+
+# Environment files
+.env
+.env.*
+
+# VCS
+.git
+.github
+
+# Editor
+.vscode
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
