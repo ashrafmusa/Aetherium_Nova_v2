@@ -111,19 +111,134 @@ All endpoints require the `x-api-key` header.
 
 ```bash
 # Create a wallet
-node dist/cli.js wallet create
+node dist/cli.js create-wallet
 
 # Check balance
-node dist/cli.js query balance --address 0x...
+node dist/cli.js get-balance 0x<address>
 
-# Send tokens
-node dist/cli.js transaction send --to 0x... --amount 100
+# Check nonce
+node dist/cli.js get-nonce 0x<address>
 
-# Stake
-node dist/cli.js staking stake --amount 1000
+# Send tokens  (WALLET_PASSWORD env var unlocks the sender)
+WALLET_PASSWORD="..." node dist/cli.js transfer <from> <to> <amount> <fee>
+
+# Stake as a validator (min 1000 AN)
+WALLET_PASSWORD="..." node dist/cli.js stake <from> <validatorAddress> <amount> <fee>
+
+# Unstake
+WALLET_PASSWORD="..." node dist/cli.js unstake <from> <validatorAddress> <amount> <fee>
+
+# Claim staking rewards
+WALLET_PASSWORD="..." node dist/cli.js claim-rewards <from> <validatorAddress> <fee>
+
+# Deploy a smart contract
+WALLET_PASSWORD="..." node dist/cli.js deploy <from> <contractFile.ts> <fee>
+
+# Call a contract (state-changing)
+WALLET_PASSWORD="..." node dist/cli.js call-contract <from> <contractAddr> <method> <fee> [params...]
+
+# Read a contract (read-only, no tx)
+node dist/cli.js read-contract <contractAddr> <method> [params...]
 
 # Mine a block
-MINER_ADDRESS=0x... node dist/cli.js mine
+WALLET_PASSWORD="..." node dist/cli.js mine
+
+# View block details
+node dist/cli.js get-block <index>
+
+# Get full node status
+node dist/cli.js status
+```
+
+---
+
+---
+
+## 🟢 Live Demo
+
+The following output was captured from a **live running node** on a local chain (height 8, Chain ID 2).
+
+### Node status
+```
+$ node dist/cli.js status
+  Blockchain Height: 8
+  Connected Peers:   0
+  Mempool Size:      0
+```
+
+### Wallets
+```
+$ node dist/cli.js list-wallets
+  - 0x249e54f4c7e421ec2728eb6d47dd5f01e3ca7e91
+  - 0x53e5542df655861ba6795f1cca0d37ea13146b2a
+  - 0x5449c1c0d82b61d2f1ba2958529dc92d5260a214
+  - 0xd5ee6bc2c1afcbfaa68b3273caf9d4c17f4819e0
+```
+
+### Balances
+```
+$ node dist/cli.js get-balance 0xd5ee6bc2c1afcbfaa68b3273caf9d4c17f4819e0
+  Balance: 635.15 AN   (miner — block rewards)
+
+$ node dist/cli.js get-balance 0x5449c1c0d82b61d2f1ba2958529dc92d5260a214
+  Balance: 999999994947998 AN   (primary vault)
+
+$ node dist/cli.js get-balance 0x249e54f4c7e421ec2728eb6d47dd5f01e3ca7e91
+  Balance: 51000 AN   (test recipient — received 50,000 AN transfer)
+```
+
+### Transfer (vault → test recipient)
+```
+$ WALLET_PASSWORD="..." node dist/cli.js transfer \
+    0x5449c1c0d82b61d2f1ba2958529dc92d5260a214 \
+    0x249e54f4c7e421ec2728eb6d47dd5f01e3ca7e91 50000 1
+
+  ✓ Transfer transaction accepted. (TxID: b6d988b9b4...)
+```
+
+### Mine a block
+```
+$ WALLET_PASSWORD="..." node dist/cli.js mine
+
+  Loading miner wallet (0xd5ee6bc2...)
+  ✓ Wallet loaded.
+  Fetching latest block and mempool...
+  Found 1 pending transactions.
+  Signing and sending block proposal to node...
+  ✓ Block proposed: 9d1af16a54...
+  🪙 Block Index: 6
+```
+
+### Stake as validator
+```
+$ WALLET_PASSWORD="..." node dist/cli.js stake \
+    0x5449c1c0d82b61d2f1ba2958529dc92d5260a214 \
+    0x5449c1c0d82b61d2f1ba2958529dc92d5260a214 1000 1
+
+  ✓ Stake transaction accepted. (TxID: 57ec92a94a...)
+```
+
+### Block 7 (stake confirmation block)
+```
+$ node dist/cli.js get-block 7
+
+  ✓ 🪙 Block 7 Details:
+  Hash:          12fcb4e3bfe69742e67ba5de966208d8ca646e86f7cc6fa54caad16341cd1bb7
+  Previous Hash: 9d1af16a54d3dc7f584006781fad95c53eb83404ef032d45a5ae9fad2bb1b677
+  Timestamp:     2/24/2026, 7:58:56 PM
+  Proposer:      0xd5ee6bc2c1afcbfaa68b3273caf9d4c17f4819e0
+  Transactions:  2
+    Tx 1: Type=STAKE,  From=0x5449c1c0..., To=0x5449c1c0..., Amount=1000, Fee=1
+    Tx 2: Type=REWARD, From=coinbase...,   To=0xd5ee6bc2..., Amount=51,   Fee=0
+```
+
+### Nonces (replay-protection)
+```
+$ node dist/cli.js get-nonce 0xd5ee6bc2c1afcbfaa68b3273caf9d4c17f4819e0
+  Nonce: 2
+
+$ node dist/cli.js get-nonce 0x5449c1c0d82b61d2f1ba2958529dc92d5260a214
+  Nonce: 2
 ```
 
 ---
