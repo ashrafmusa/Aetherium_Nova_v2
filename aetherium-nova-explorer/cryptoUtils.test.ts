@@ -14,8 +14,8 @@ describe('cryptoUtils', () => {
         const { publicKey, secretKey } = generateKeyPair();
         expect(publicKey).toBeDefined();
         expect(secretKey).toBeDefined();
-        expect(publicKey.length).toBe(130);
-        expect(secretKey.length).toBe(64);
+        expect(publicKey.length).toBe(3904); // ML-DSA65 public key: 1952 bytes × 2 hex chars
+        expect(secretKey.length).toBe(64);  // seed: 32 bytes × 2 hex chars
     });
 
     it('should create a consistent transaction hash', () => {

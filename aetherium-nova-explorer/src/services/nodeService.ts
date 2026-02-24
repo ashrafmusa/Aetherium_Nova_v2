@@ -1,9 +1,8 @@
 
 import { sha256 } from 'js-sha256';
-import type { Transaction, Block, Wallet, Validator, NetworkState, WalletState } from '../types.js'; // Removed UnsignedTransaction unused
-import { ec as EC } from 'elliptic';
+import type { Transaction, Block, Wallet, Validator, NetworkState, WalletState } from '../types.js';
+import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';
 
-const ec = new EC('secp256k1');
 const API_URL = 'http://localhost:3001';
 
 export class NodeService {
@@ -91,32 +90,17 @@ export class NodeService {
         }
     }
 
-    // Client-side wallet creation (keys stay in browser!)
+    // Client-side wallet creation — keys stay in browser, never sent to server!
     public createWallet(): Wallet {
-        const keyPair = ec.genKeyPair();
-        const publicKey = keyPair.getPublic('hex');
-        const secretKey = keyPair.getPrivate('hex');
-
-        // Derive address simply (mock for now or match backend logic).
-        // Backend `wallet.ts` logic: 
-        // const publicKey = key.getPublic('hex');
-        // const address = "0x" + keccak256(publicKey).slice(-40); or similar.
-        // I'll stick to a simple internal representation or query backend create-wallet?
-        // NO, backend create-wallet keeps keys private?
-        // Backend `createWallet` returns { publicKey, address }. It generates random.
-        // The Frontend usually wants to hold the private key.
-        // So I will implement matching address generation here.
-
-        // sha256 of public key logic from backend?
-        const hash = sha256(Buffer.from(publicKey, 'hex'));
+        const seed = crypto.getRandomValues(new Uint8Array(32));
+        const { publicKey: pubKeyBytes } = ml_dsa65.keygen(seed);
+        const publicKey = Array.from(pubKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        const secretKey = Array.from(seed).map(b => b.toString(16).padStart(2, '0')).join('');
+        // Derive address matching backend formula: 0x + sha256(pubKeyBytes).slice(0, 40)
+        const hash = sha256(new Uint8Array(pubKeyBytes));
         const address = '0x' + hash.slice(0, 40);
-
         return {
-            publicKey, // This might actually be the address in strict types?
-            // In types.ts: publicKey: string;
-            // Let's store address in publicKey field if the app treats it as identifier?
-            // Or maybe the app expects full pubkey.
-            // I'll return full pubkey and secret.
+            publicKey,
             secretKey,
             balance: 0,
             stakes: [],

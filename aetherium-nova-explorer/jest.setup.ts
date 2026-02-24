@@ -1,4 +1,15 @@
 import '@testing-library/jest-dom';
+import { TextEncoder, TextDecoder } from 'util';
+import { webcrypto } from 'crypto';
+
+// ── Web Crypto / TextEncoder polyfills (required by @noble/post-quantum) ─────
+if (typeof globalThis.TextEncoder === 'undefined') {
+    (globalThis as any).TextEncoder = TextEncoder;
+    (globalThis as any).TextDecoder = TextDecoder;
+}
+if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.getRandomValues) {
+    (globalThis as any).crypto = webcrypto;
+}
 
 // ── Canvas mock (jsdom does not implement HTMLCanvasElement.getContext) ──────
 HTMLCanvasElement.prototype.getContext = jest.fn(() => ({

@@ -10,6 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@noble/post-quantum": "^0.5.4",
     "@playwright/test": "^1.56.0",
     "elliptic": "^6.6.1",
     "js-sha256": "^0.11.1",

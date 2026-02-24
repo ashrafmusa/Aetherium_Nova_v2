@@ -6,9 +6,9 @@
 # and displays the public key to paste into the OCI console.
 # =============================================================================
 
-$keyName  = "aetherium-oci"
-$keyPath  = Join-Path $env:USERPROFILE ".ssh\$keyName"
-$sshDir   = Join-Path $env:USERPROFILE ".ssh"
+$keyName = "aetherium-oci"
+$keyPath = Join-Path $env:USERPROFILE ".ssh\$keyName"
+$sshDir = Join-Path $env:USERPROFILE ".ssh"
 
 # 1. Ensure .ssh directory exists
 if (-not (Test-Path $sshDir)) {
@@ -19,7 +19,8 @@ if (-not (Test-Path $sshDir)) {
 # 2. Generate key pair (skip if already exists)
 if (Test-Path $keyPath) {
     Write-Host "[SKIP] Key already exists at $keyPath"
-} else {
+}
+else {
     ssh-keygen -t rsa -b 4096 -f $keyPath -N "" -C "aetherium-nova-oci-$(Get-Date -Format 'yyyy-MM-dd')"
     Write-Host "[OK] Key pair created: $keyPath"
 }

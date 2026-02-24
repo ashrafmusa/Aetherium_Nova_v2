@@ -1,20 +1,20 @@
 
-import elliptic from 'elliptic';
-const { ec: EC } = elliptic;
+// Post-quantum digital signatures: CRYSTALS-Dilithium ML-DSA65
+// NIST FIPS 204 — Level 3 security (equivalent to AES-192)
+import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { getLogger } from './logger.js';
 
 const log = getLogger();
-const ec = new EC('secp256k1');
 const WALLETS_DIR = path.resolve(process.cwd(), 'wallets');
 
 // --- Wallet Data Structures ---
 
 export interface Wallet {
-  publicKey: string; // Hex string
-  privateKey: string; // Hex string
+  publicKey: string; // Hex string — ML-DSA65 public key (1952 bytes = 3904 hex chars)
+  privateKey: string; // Hex string — 32-byte seed (64 hex chars) that derives the keypair
   address: string;
   isEncrypted: boolean;
 }
@@ -22,27 +22,29 @@ export interface Wallet {
 // --- Core Cryptographic Functions ---
 
 /**
- * Generates a new secp256k1 key pair and derives a blockchain address.
- * Keys are generated in Hex format.
- * @returns A new Wallet object with public/private keys and address.
+ * Generates a new ML-DSA65 (CRYSTALS-Dilithium) key pair and derives a blockchain address.
+ * The "private key" stored is the 32-byte seed from which the full keypair is deterministically
+ * derived — keeping encrypted storage compact while remaining fully post-quantum secure.
+ * @returns A new Wallet with publicKey, privateKey (seed), and address.
  */
 export function createWallet(): Wallet {
-  const keyPair = ec.genKeyPair();
-  const publicKey = keyPair.getPublic('hex');
-  const privateKey = keyPair.getPrivate('hex');
+  const seed = crypto.randomBytes(32);
+  const { publicKey: pubKeyBytes } = ml_dsa65.keygen(seed);
+  const publicKey = Buffer.from(pubKeyBytes).toString('hex');
+  const privateKey = seed.toString('hex'); // 32 bytes = 64 hex chars
   const address = generateAddress(publicKey);
-
   return { privateKey, publicKey, address, isEncrypted: false };
 }
 
 /**
- * Derives the public key from a private key.
- * @param privateKeyHex The private key in Hex format.
- * @returns The public key in Hex format.
+ * Re-derives the ML-DSA65 public key from a 32-byte seed.
+ * @param seedHex The wallet seed (private key) in Hex format.
+ * @returns The ML-DSA65 public key in Hex format.
  */
-export function getPublicKeyFromPrivate(privateKeyHex: string): string {
-  const key = ec.keyFromPrivate(privateKeyHex, 'hex');
-  return key.getPublic('hex');
+export function getPublicKeyFromPrivate(seedHex: string): string {
+  const seed = Buffer.from(seedHex, 'hex');
+  const { publicKey } = ml_dsa65.keygen(seed);
+  return Buffer.from(publicKey).toString('hex');
 }
 
 /**
@@ -52,56 +54,46 @@ export function getPublicKeyFromPrivate(privateKeyHex: string): string {
  * @returns The blockchain address.
  */
 export function generateAddress(publicKeyHex: string): string {
-  // Simple Sha256 of the Hex string (consistent with frontend simple approach)
-  // Ensure we hash the BUFFER of the hex string if that's what we want, or the string itself?
-  // Frontend nodeService mock used: const hash = sha256(Buffer.from(publicKey, 'hex')); (In my mental model)
-  // Let's check frontend cryptoUtils: it uses `sha256(txString)`. 
-  // Standard AetheriumNova likely just hashes the string or bytes.
-  // I will hash the hex string as distinct bytes.
-  // Buffer.from(hex, 'hex')
-
+  // SHA-256 of the raw public key bytes → first 40 hex chars → 0x prefix
+  // SHA-256 provides 128-bit post-quantum security via Grover's algorithm.
   const buffer = Buffer.from(publicKeyHex, 'hex');
   const hash = crypto.createHash('sha256').update(buffer).digest('hex');
   return `0x${hash.slice(0, 40)}`;
 }
 
 /**
- * Signs a payload with a private key.
- * @param privateKeyHex The private key in Hex format.
- * @param payload The data to be signed (string).
- * @returns The signature string (DER Hex).
+ * Signs a payload using ML-DSA65 (CRYSTALS-Dilithium).
+ * The "seed" (private key) is used to deterministically derive the full ML-DSA65 secret key.
+ * Dilithium applies SHAKE-256 internally — no pre-hashing is required or performed.
+ * The `alreadyHashed` parameter is kept for API compatibility but is ignored.
+ * @param seedHex The 32-byte wallet seed in Hex format.
+ * @param payload The data to sign (raw string).
+ * @returns The ML-DSA65 signature in Hex format.
  */
-export function signTransaction(privateKeyHex: string, payload: string, alreadyHashed = false): string {
-  // If the caller has already computed the SHA‑256 hash of the payload (e.g. when
-  // mining a block) they can set `alreadyHashed` to true so we don't hash a hash
-  // again.  All other callers should leave this false and supply the raw string.
-  // The frontend `sign` helper also operates on a hash, so when the UI generates
-  // a signature it hashes first and passes that value in.
-
-  const payloadHash = alreadyHashed
-    ? payload
-    : crypto.createHash('sha256').update(payload).digest('hex');
-  const key = ec.keyFromPrivate(privateKeyHex, 'hex');
-  const signature = key.sign(payloadHash, 'hex');
-  return signature.toDER('hex');
+export function signTransaction(seedHex: string, payload: string, alreadyHashed = false): string {
+  const seed = Buffer.from(seedHex, 'hex');
+  const { secretKey } = ml_dsa65.keygen(seed);
+  const msgBytes = Buffer.from(payload, 'utf8');
+  const sig = ml_dsa65.sign(msgBytes, secretKey);
+  return Buffer.from(sig).toString('hex');
 }
 
 /**
- * Verifies a signature against a payload and public key.
- * @param publicKeyHex The public key in Hex format.
- * @param payload The original data (raw string).
- * @param signatureHex The signature to verify (DER Hex).
- * @returns True if the signature is valid, otherwise false.
+ * Verifies an ML-DSA65 (CRYSTALS-Dilithium) signature.
+ * The `alreadyHashed` parameter is kept for API compatibility but is ignored.
+ * @param publicKeyHex The ML-DSA65 public key in Hex format.
+ * @param payload The original signed data (raw string).
+ * @param signatureHex The signature in Hex format.
+ * @returns True if valid, false otherwise.
  */
 export function verifySignature(publicKeyHex: string, payload: string, signatureHex: string, alreadyHashed = false): boolean {
   try {
-    const payloadHash = alreadyHashed
-      ? payload
-      : crypto.createHash('sha256').update(payload).digest('hex');
-    const key = ec.keyFromPublic(publicKeyHex, 'hex');
-    return key.verify(payloadHash, signatureHex);
+    const pubKey = Buffer.from(publicKeyHex, 'hex');
+    const msgBytes = Buffer.from(payload, 'utf8');
+    const sig = Buffer.from(signatureHex, 'hex');
+    return ml_dsa65.verify(sig, msgBytes, pubKey);
   } catch (e) {
-    console.error("Signature verification failed:", e);
+    log.error('ML-DSA65 signature verification failed: ' + String(e));
     return false;
   }
 }

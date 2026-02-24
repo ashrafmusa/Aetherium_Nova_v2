@@ -1,9 +1,8 @@
 
 import { sha256 } from 'js-sha256';
 import type { Transaction, Block, Wallet, Validator, NetworkState, WalletState, SearchResult } from '../types.js';
-import { ec as EC } from 'elliptic';
+import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';
 
-const ec = new EC('secp256k1');
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const API_KEY = import.meta.env.VITE_API_KEY ?? 'a-very-secret-key';
 
@@ -11,11 +10,10 @@ const authHeaders: Record<string, string> = {
     'x-api-key': API_KEY,
 };
 
-/** Derive a backend-compatible address from a secp256k1 public key.
- *  Backend formula (wallet.ts): '0x' + sha256(Buffer.from(publicKey, 'hex')).slice(0, 40)
+/** Derives a backend-compatible address from an ML-DSA65 public key (hex).
+ *  Formula: '0x' + sha256(publicKeyBytes).slice(0, 40)  — identical to src/wallet.ts
  */
 function hexToBytes(hex: string): Uint8Array {
-    // browser-safe conversion
     const bytes = new Uint8Array(hex.length / 2);
     for (let i = 0; i < bytes.length; i++) {
         bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
@@ -24,7 +22,6 @@ function hexToBytes(hex: string): Uint8Array {
 }
 
 function deriveAddress(publicKeyHex: string): string {
-    // sha256 accepts a string or array; we pass binary bytes
     return '0x' + sha256(hexToBytes(publicKeyHex)).slice(0, 40);
 }
 
@@ -131,18 +128,16 @@ export class NodeService {
         }
     }
 
-    // Client-side wallet creation (keys stay in browser!)
+    // Client-side wallet creation — keys stay in browser, never sent to server!
     public createWallet(): Wallet {
-        const keyPair = ec.genKeyPair();
-        const publicKey = keyPair.getPublic('hex');
-        const secretKey = keyPair.getPrivate('hex');
-
-        // Derive address matching backend formula:
-        // 0x + sha256(Buffer.from(publicKey, 'hex')).slice(0, 40)
+        const seed = crypto.getRandomValues(new Uint8Array(32));
+        const { publicKey: pubKeyBytes } = ml_dsa65.keygen(seed);
+        const publicKey = Array.from(pubKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        const secretKey = Array.from(seed).map(b => b.toString(16).padStart(2, '0')).join('');
         const address = deriveAddress(publicKey);
 
         return {
-            publicKey: address, // use address as the public-facing identifier
+            publicKey: address, // address used as public-facing identifier in the UI
             secretKey,
             balance: 0,
             stakes: [],
