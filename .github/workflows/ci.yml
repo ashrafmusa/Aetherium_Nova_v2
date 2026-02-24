@@ -28,18 +28,24 @@ jobs:
       - name: Install backend dependencies
         run: npm ci
 
+      - name: Install explorer dependencies
+        working-directory: aetherium-nova-explorer
+        run: npm ci
+
       - name: Build backend (TypeScript → dist/)
         run: npm run build
 
       - name: Run backend tests
-        run: npm test
+        run: npm run test:node
         env:
           API_KEY: ci-test-key
           NODE_ENV: test
 
-      - name: Install explorer dependencies
+      - name: Run explorer tests
         working-directory: aetherium-nova-explorer
-        run: npm ci
+        run: npm test
+        env:
+          CI: true
 
       - name: Build explorer (Vite production bundle)
         working-directory: aetherium-nova-explorer
